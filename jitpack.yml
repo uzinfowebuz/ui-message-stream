@@ -1,0 +1,15 @@
+# JitPack build configuration — https://docs.jitpack.io/building/
+#
+# This library targets Java 25, which JitPack's default build image does not ship.
+# We provision Temurin 25 through SDKMAN (the documented way to select a specific JDK),
+# activate it for the build shell, then run the exact Maven build JitPack would run by
+# default (./mvnw install) — adding `clean` for a reproducible artifact set.
+#
+# If "25.0.2-tem" is not available on the build image, bump it to any 25.x.y-tem listed by
+# `sdk list java` (Temurin 25 GA or later); the only requirement is a JDK >= 25.
+before_install:
+  - sdk update
+  - sdk install java 25.0.2-tem
+  - sdk use java 25.0.2-tem
+install:
+  - ./mvnw clean install -DskipTests
