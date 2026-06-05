@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      We inherit from spring-boot-starter-parent purely to reuse its curated dependency
+      management (spring-web, reactor, jackson, junit, assertj, spring-test, ...). The
+      published artifacts are plain libraries; no module declares the spring-boot-maven-plugin,
+      so nothing is ever repackaged into a fat jar.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.6</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>uz.uzinfoweb</groupId>
+    <artifactId>ui-message-stream-parent</artifactId>
+    <version>0.1.0</version>
+    <packaging>pom</packaging>
+
+    <name>UI Message Stream :: Parent</name>
+    <description>
+        App-agnostic Java implementation of the AI SDK v6 "UI Message Stream" wire protocol.
+        Not affiliated with Vercel; implements the open protocol described at
+        https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
+    </description>
+
+    <!--
+      OSS / Maven Central metadata. The repository, organization and developer values below are
+      placeholders tied to the uz.uzinfoweb namespace — confirm them before the manual release.
+      Central requires <url>, <licenses>, <scm> and <developers> to be present and the namespace
+      (uz.uzinfoweb, verified via DNS TXT on uzinfoweb.uz) to be owned; fall back to io.github.<user>
+      if the domain cannot be verified.
+    -->
+    <url>https://github.com/uzinfoweb/ui-message-stream</url>
+
+    <organization>
+        <name>Uzinfoweb</name>
+        <url>https://uzinfoweb.uz</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>uzinfoweb</id>
+            <name>Uzinfoweb</name>
+            <url>https://uzinfoweb.uz</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/uzinfoweb/ui-message-stream.git</connection>
+        <developerConnection>scm:git:git@github.com:uzinfoweb/ui-message-stream.git</developerConnection>
+        <url>https://github.com/uzinfoweb/ui-message-stream</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <modules>
+        <module>ui-message-stream-core</module>
+        <module>ui-message-stream-spring</module>
+        <module>ui-message-stream-spring-boot-starter</module>
+    </modules>
+
+    <properties>
+        <!-- Toolchain supports 25 (matches the quizify backend). -->
+        <java.version>25</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- Confirmed against quizify-backend/pom.xml (Spring AI 2.0.0-M8). -->
+        <spring-ai.version>2.0.0-M8</spring-ai.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring AI BOM -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Internal modules -->
+            <dependency>
+                <groupId>uz.uzinfoweb</groupId>
+                <artifactId>ui-message-stream-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>uz.uzinfoweb</groupId>
+                <artifactId>ui-message-stream-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <profiles>
+        <!--
+          Manual Maven Central release:  mvn -Prelease deploy
+          Prerequisites:
+            * a GPG key on the release machine (maven-gpg-plugin signs every artifact),
+            * a ~/.m2/settings.xml <server> with id "central" holding a Sonatype Central token,
+            * the uz.uzinfoweb namespace verified in the Central Portal.
+          Source + javadoc jars are attached (Central requires both). Plugin versions for
+          source/javadoc/gpg come from spring-boot-starter-parent's plugin management.
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.7.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>

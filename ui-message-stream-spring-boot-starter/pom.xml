@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>uz.uzinfoweb</groupId>
+        <artifactId>ui-message-stream-parent</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>ui-message-stream-spring-boot-starter</artifactId>
+    <name>UI Message Stream :: Spring Boot Starter</name>
+    <description>
+        Auto-configuration + the dependency you add to a Spring Boot app. Brings the core and spring
+        modules transitively and registers the default ResponseMapper (@ConditionalOnMissingBean).
+    </description>
+
+    <dependencies>
+        <!-- Library code we want on the application's classpath. -->
+        <dependency>
+            <groupId>uz.uzinfoweb</groupId>
+            <artifactId>ui-message-stream-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>uz.uzinfoweb</groupId>
+            <artifactId>ui-message-stream-spring</artifactId>
+        </dependency>
+
+        <!-- Provided: the host Spring Boot app already supplies these. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- ResponseMapper's supertype references ChatClientResponse; needed to compile the bean. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- ToolCallingManager (opt-in native tool I/O auto-config) lives here. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Test only. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

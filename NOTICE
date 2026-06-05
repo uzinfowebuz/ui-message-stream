@@ -1,0 +1,13 @@
+ui-message-stream
+Copyright 2026 Uzinfoweb
+
+This product is licensed under the Apache License, Version 2.0 (see the LICENSE file).
+
+This library is an independent, app-agnostic implementation of the open "UI Message Stream"
+wire protocol described by the AI SDK:
+
+    https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
+
+It is NOT affiliated with, endorsed by, or sponsored by Vercel Inc. The names "AI SDK" and
+"Vercel" are referenced only to describe wire-protocol compatibility. All trademarks are the
+property of their respective owners.

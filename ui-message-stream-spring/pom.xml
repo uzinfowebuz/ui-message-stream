@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>uz.uzinfoweb</groupId>
+        <artifactId>ui-message-stream-parent</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>ui-message-stream-spring</artifactId>
+    <name>UI Message Stream :: Spring</name>
+    <description>
+        Web + reactive + Spring AI bridge: turns a ChatClient response Flux into an SSE Flux of
+        protocol frames. Spring/Reactor/Spring AI are all "provided" — this is a library.
+    </description>
+
+    <dependencies>
+        <!-- The protocol (the only non-provided dependency we contribute transitively). -->
+        <dependency>
+            <groupId>uz.uzinfoweb</groupId>
+            <artifactId>ui-message-stream-core</artifactId>
+        </dependency>
+
+        <!-- Provided: supplied by the host application at runtime. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Servlet/MVC transport: SseEmitter lives in spring-webmvc; HttpServletResponse in the
+             Jakarta Servlet API. Both are "provided" by the host servlet app at runtime. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- ChatResponse / Generation / AssistantMessage live here (also arrives transitively via
+             spring-ai-client-chat, declared explicitly because the default mapper imports them). -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Test only. -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
