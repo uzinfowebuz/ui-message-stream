@@ -5,10 +5,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.util.MimeType;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,5 +79,49 @@ class UiMessageRequestAdapterTest {
     @DisplayName("a null request yields an empty message list")
     void nullRequest() {
         assertThat(UiMessageRequestAdapter.toSpringAiMessages(null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("reconstructs an assistant tool call and extracts the approval decision")
+    void reconstructsToolCallAndApproval() {
+        UiMessageRequest.Part toolPart = new UiMessageRequest.Part(
+                "tool-getWeather", null, null, null,
+                "call_1", null, "approval-responded",
+                Map.of("city", "NYC"), null, null,
+                new UiMessageRequest.Approval("appr_1", true, null));
+        UiMessageRequest request = new UiMessageRequest(List.of(
+                new UiMessageRequest.Message("u", "user",
+                        List.of(new UiMessageRequest.Part("text", "weather?", null, null))),
+                new UiMessageRequest.Message("a", "assistant", List.of(toolPart))));
+
+        assertThat(UiMessageRequestAdapter.toolApprovalDecisions(request)).containsEntry("call_1", true);
+
+        List<Message> messages = UiMessageRequestAdapter.toSpringAiMessages(request);
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(0)).isInstanceOf(UserMessage.class);
+        AssistantMessage assistant = (AssistantMessage) messages.get(1);
+        assertThat(assistant.hasToolCalls()).isTrue();
+        assertThat(assistant.getToolCalls().getFirst().id()).isEqualTo("call_1");
+        assertThat(assistant.getToolCalls().getFirst().name()).isEqualTo("getWeather");
+    }
+
+    @Test
+    @DisplayName("an output-available tool part reconstructs a following ToolResponseMessage")
+    void reconstructsToolResponse() {
+        UiMessageRequest.Part toolPart = new UiMessageRequest.Part(
+                "dynamic-tool", null, null, null,
+                "call_1", "getWeather", "output-available",
+                Map.of("city", "NYC"), Map.of("tempC", 12), null, null);
+        UiMessageRequest request = new UiMessageRequest(List.of(
+                new UiMessageRequest.Message("a", "assistant", List.of(toolPart))));
+
+        List<Message> messages = UiMessageRequestAdapter.toSpringAiMessages(request);
+
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(0)).isInstanceOf(AssistantMessage.class);
+        assertThat(messages.get(1)).isInstanceOf(ToolResponseMessage.class);
+        ToolResponseMessage toolResponse = (ToolResponseMessage) messages.get(1);
+        assertThat(toolResponse.getResponses().getFirst().id()).isEqualTo("call_1");
+        assertThat(toolResponse.getResponses().getFirst().responseData()).contains("tempC");
     }
 }

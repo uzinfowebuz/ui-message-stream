@@ -17,11 +17,17 @@ Spring AI backend to a `useChat` frontend.
   - `start` (`messageId`), `start-step`
   - `text-start` / `text-delta` / `text-end` (each with a stable `id`)
   - `reasoning-start` / `reasoning-delta` / `reasoning-end`
-  - `tool-input-start`, `tool-input-delta`, `tool-input-available`, `tool-output-available`
+  - `tool-input-start`, `tool-input-delta`, `tool-input-available`, `tool-input-error`
+  - `tool-output-available`, `tool-output-error`
+  - `tool-approval-request`, `tool-output-denied` — human-in-the-loop approval
   - `source-url`, `source-document`, `file`
   - `data-<name>` — generic application data; optional `id` reconciles/updates the part in place
-  - `error` (`errorText`)
-  - `finish-step`, `finish`, `abort` (`reason`)
+  - `message-metadata`, `error` (`errorText`)
+  - `finish-step`, `finish`, `abort`
+- **Optional fields** — `providerMetadata`, `providerExecuted`, `dynamic`, `title`, `preliminary`,
+  `filename`, `transient`, `finishReason`/`messageMetadata` are emitted when set and omitted when not.
+  Tool parts default to `dynamic:true` (rendered via the client's generic `dynamic-tool` path).
+  Validated against `ai@6.0.0`; pin `ai@^6.0.0`.
 
 ## The two invariants this library enforces
 
@@ -50,7 +56,7 @@ Built against Spring Boot 4.0.6 (Spring Framework 7) and Spring AI 2.0.0-M8, Jav
 <dependency>
     <groupId>uz.uzinfoweb</groupId>
     <artifactId>ui-message-stream-spring-boot-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -139,6 +145,44 @@ in correct order relative to text:
 ```java
 sink.data("artifact", Map.of("id", "a1", "kind", "quiz"));
 ```
+
+### Tool-call errors and human-in-the-loop approval (opt-in)
+
+With native tool I/O enabled, `RecordingToolCallingManager` also emits `tool-output-error` when a tool
+throws (opt into a throwing `ToolExecutionExceptionProcessor` so a failure surfaces instead of becoming
+an ordinary tool result).
+
+For human-in-the-loop, declare an `ApprovalPolicy` bean to gate specific tools:
+
+```java
+@Bean
+ApprovalPolicy approvalPolicy() {
+    return (toolName, input) -> "transferFunds".equals(toolName); // gate sensitive tools
+}
+```
+
+A gated call emits `tool-approval-request` and **pauses the turn** (nothing runs); the stream finishes
+and the client shows approve/deny. On the next request, parse the decision and hand it to the gate via
+the tool context, alongside the replayed history:
+
+```java
+var decisions = UiMessageRequestAdapter.toolApprovalDecisions(body); // Map<toolCallId, approved>
+var messages  = UiMessageRequestAdapter.toSpringAiMessages(body);     // replays prior tool turns
+
+SerializedPartSink sink = new SerializedPartSink();
+var upstream = chatClient.prompt()
+        .messages(messages)
+        .toolContext(Map.of(
+                RecordingToolCallingManager.SINK_KEY, sink,
+                RecordingToolCallingManager.APPROVALS_KEY, decisions))
+        .stream().chatClientResponse();
+UiMessageStreamResponse.of(new UiMessageStream().from(upstream, ChatClientResponseMapper.TEXT_ONLY, sink));
+```
+
+On approval the tool runs and emits `tool-output-available`; on denial it emits `tool-output-denied` and
+the model is told so it can respond. **Scope:** the library owns the wire parts, the inbound parsing and
+the gate; cross-request continuity follows the *stateless-replay* model (`useChat` resends the full
+history, keyed by a stable `toolCallId`) — it does not persist server-side sessions.
 
 ## Build
 

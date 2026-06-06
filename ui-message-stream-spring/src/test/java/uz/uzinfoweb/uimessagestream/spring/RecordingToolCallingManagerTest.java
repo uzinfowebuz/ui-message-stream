@@ -1,5 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("RecordingToolCallingManager")
 class RecordingToolCallingManagerTest {
@@ -85,6 +87,140 @@ class RecordingToolCallingManagerTest {
         assertThat(result.conversationHistory()).containsExactly(toolResponse);
     }
 
+    @Test
+    @DisplayName("tool parts are tagged dynamic:true by default, and dynamic=false omits the flag")
+    void dynamicTagging() {
+        List<UiMessagePart> dyn = recordParts(new RecordingToolCallingManager(
+                delegate(new AtomicBoolean(), toolResponse("call_1", "getWeather", "{\"tempC\":12}")),
+                new ObjectMapper(), true));
+        UiMessagePart.ToolInputAvailable dynIn =
+                (UiMessagePart.ToolInputAvailable) dyn.get(indexOfType(dyn, "tool-input-available"));
+        UiMessagePart.ToolOutputAvailable dynOut =
+                (UiMessagePart.ToolOutputAvailable) dyn.get(indexOfType(dyn, "tool-output-available"));
+        assertThat(dynIn.dynamic()).isTrue();
+        assertThat(dynOut.dynamic()).isTrue();
+
+        List<UiMessagePart> stat = recordParts(new RecordingToolCallingManager(
+                delegate(new AtomicBoolean(), toolResponse("call_1", "getWeather", "{}")),
+                new ObjectMapper(), false));
+        UiMessagePart.ToolInputAvailable statIn =
+                (UiMessagePart.ToolInputAvailable) stat.get(indexOfType(stat, "tool-input-available"));
+        assertThat(statIn.dynamic()).isNull();
+    }
+
+    @Test
+    @DisplayName("a thrown tool surfaces tool-output-error for the in-flight call, then rethrows")
+    void throwingToolEmitsOutputError() {
+        List<UiMessagePart> parts = new ArrayList<>();
+        SerializedPartSink sink = new SerializedPartSink();
+        sink.bind(new UiMessageStreamWriter(parts::add));
+
+        ChatResponse chatResponse = chatResponseWithToolCall("call_1", "boomTool", "{}");
+        ToolCallingManager delegate = new ToolCallingManager() {
+            @Override
+            public List<ToolDefinition> resolveToolDefinitions(ToolCallingChatOptions chatOptions) {
+                return List.of();
+            }
+
+            @Override
+            public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
+                throw new IllegalStateException("kaboom");
+            }
+        };
+
+        assertThatThrownBy(() ->
+                new RecordingToolCallingManager(delegate).executeToolCalls(promptWithSink(sink), chatResponse))
+                .isInstanceOf(IllegalStateException.class);
+
+        int errIdx = indexOfType(parts, "tool-output-error");
+        assertThat(errIdx).as("tool-output-error emitted").isGreaterThanOrEqualTo(0);
+        UiMessagePart.ToolOutputError err = (UiMessagePart.ToolOutputError) parts.get(errIdx);
+        assertThat(err.toolCallId()).isEqualTo("call_1");
+        assertThat(err.errorText()).isEqualTo("kaboom");
+        assertThat(err.dynamic()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a policy-gated call with no decision emits tool-approval-request and pauses (returnDirect, no execution)")
+    void approvalPauses() {
+        List<UiMessagePart> parts = new ArrayList<>();
+        SerializedPartSink sink = new SerializedPartSink();
+        sink.bind(new UiMessageStreamWriter(parts::add));
+
+        AtomicBoolean delegated = new AtomicBoolean(false);
+        ToolCallingManager delegate = delegate(delegated, toolResponse("call_1", "getWeather", "{}"));
+
+        ToolExecutionResult result = new RecordingToolCallingManager(delegate, new ObjectMapper(), true,
+                (name, input) -> true)
+                .executeToolCalls(promptWith(sink, Map.of()),
+                        chatResponseWithToolCall("call_1", "getWeather", "{\"city\":\"NYC\"}"));
+
+        assertThat(delegated).as("not executed while pending approval").isFalse();
+        assertThat(result.returnDirect()).as("turn paused").isTrue();
+        assertThat(parts.stream().map(UiMessagePart::type).toList())
+                .containsSubsequence("tool-input-available", "tool-approval-request");
+        UiMessagePart.ToolApprovalRequest request =
+                (UiMessagePart.ToolApprovalRequest) parts.get(indexOfType(parts, "tool-approval-request"));
+        assertThat(request.toolCallId()).isEqualTo("call_1");
+        assertThat(request.approvalId()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("a denied decision emits tool-output-denied, skips execution, and hands the model a denial")
+    void denialSkipsExecution() {
+        List<UiMessagePart> parts = new ArrayList<>();
+        SerializedPartSink sink = new SerializedPartSink();
+        sink.bind(new UiMessageStreamWriter(parts::add));
+
+        AtomicBoolean delegated = new AtomicBoolean(false);
+        ToolCallingManager delegate = delegate(delegated, toolResponse("call_1", "getWeather", "{}"));
+
+        ToolExecutionResult result = new RecordingToolCallingManager(delegate, new ObjectMapper(), true,
+                (name, input) -> true)
+                .executeToolCalls(promptWith(sink, Map.of("call_1", false)),
+                        chatResponseWithToolCall("call_1", "getWeather", "{}"));
+
+        assertThat(delegated).as("denied tool not executed").isFalse();
+        assertThat(result.returnDirect()).as("model continues to respond to the denial").isFalse();
+        assertThat(parts.stream().map(UiMessagePart::type).toList())
+                .containsSubsequence("tool-input-available", "tool-output-denied");
+        assertThat(result.conversationHistory()).anyMatch(ToolResponseMessage.class::isInstance);
+    }
+
+    @Test
+    @DisplayName("an approved decision executes the tool and emits tool-output-available")
+    void approvalExecutes() {
+        List<UiMessagePart> parts = new ArrayList<>();
+        SerializedPartSink sink = new SerializedPartSink();
+        sink.bind(new UiMessageStreamWriter(parts::add));
+
+        AtomicBoolean delegated = new AtomicBoolean(false);
+        ToolCallingManager delegate = delegate(delegated, toolResponse("call_1", "getWeather", "{\"tempC\":12}"));
+
+        new RecordingToolCallingManager(delegate, new ObjectMapper(), true, (name, input) -> true)
+                .executeToolCalls(promptWith(sink, Map.of("call_1", true)),
+                        chatResponseWithToolCall("call_1", "getWeather", "{}"));
+
+        assertThat(delegated).as("approved tool executed").isTrue();
+        assertThat(parts.stream().map(UiMessagePart::type).toList())
+                .containsSubsequence("tool-input-available", "tool-output-available");
+    }
+
+    /** Binds a fresh sink, runs the manager over a single tool call, and returns the emitted parts. */
+    private static List<UiMessagePart> recordParts(RecordingToolCallingManager manager) {
+        List<UiMessagePart> parts = new ArrayList<>();
+        SerializedPartSink sink = new SerializedPartSink();
+        sink.bind(new UiMessageStreamWriter(parts::add));
+        manager.executeToolCalls(promptWithSink(sink), chatResponseWithToolCall("call_1", "getWeather", "{}"));
+        return parts;
+    }
+
+    private static ToolResponseMessage toolResponse(String id, String name, String data) {
+        return ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse(id, name, data)))
+                .build();
+    }
+
     private static ChatResponse chatResponseWithToolCall(String id, String name, String arguments) {
         AssistantMessage assistant = AssistantMessage.builder()
                 .content("")
@@ -96,6 +232,15 @@ class RecordingToolCallingManagerTest {
     private static Prompt promptWithSink(SerializedPartSink sink) {
         ToolCallingChatOptions options = ToolCallingChatOptions.builder()
                 .toolContext(Map.of(RecordingToolCallingManager.SINK_KEY, sink))
+                .build();
+        return new Prompt(List.of(new UserMessage("weather?")), options);
+    }
+
+    private static Prompt promptWith(SerializedPartSink sink, Map<String, Boolean> approvals) {
+        ToolCallingChatOptions options = ToolCallingChatOptions.builder()
+                .toolContext(Map.of(
+                        RecordingToolCallingManager.SINK_KEY, sink,
+                        RecordingToolCallingManager.APPROVALS_KEY, approvals))
                 .build();
         return new Prompt(List.of(new UserMessage("weather?")), options);
     }

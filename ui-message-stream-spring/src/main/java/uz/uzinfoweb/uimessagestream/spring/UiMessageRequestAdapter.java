@@ -1,13 +1,17 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.content.Media;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -18,8 +22,19 @@ import java.util.Objects;
  * into {@link Media} via a {@link MediaResolver} (the {@linkplain MediaResolver#DEFAULT URL-based
  * default} unless you pass your own) and attached to the {@link UserMessage}; a part the resolver
  * cannot handle is skipped without failing the request.
+ *
+ * <p><b>Tool turns (HITL).</b> An assistant message's tool parts are reconstructed into an
+ * {@link AssistantMessage} carrying {@link AssistantMessage.ToolCall}s, followed by a
+ * {@link ToolResponseMessage} for any tool part already in a terminal state ({@code output-available} /
+ * {@code output-denied} / {@code output-error}). This gives a resumed model call the prior tool context
+ * (the <em>stateless-replay</em> model: {@code useChat} resends the full history). Use
+ * {@link #toolApprovalDecisions(UiMessageRequest)} to extract the user's approve/deny decisions for the
+ * {@link RecordingToolCallingManager} approval gate.
  */
 public final class UiMessageRequestAdapter {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String DENIED_MESSAGE = "Error: The user denied execution of this tool.";
 
     private UiMessageRequestAdapter() {
     }
@@ -37,14 +52,69 @@ public final class UiMessageRequestAdapter {
             return messages;
         }
         for (UiMessageRequest.Message uiMessage : request.messages()) {
-            String text = concatenateText(uiMessage);
-            messages.add(switch (normalizedRole(uiMessage)) {
-                case "assistant" -> new AssistantMessage(text);
-                case "system" -> new SystemMessage(text);
-                default -> toUserMessage(text, uiMessage, mediaResolver);
-            });
+            switch (normalizedRole(uiMessage)) {
+                case "assistant" -> appendAssistant(messages, uiMessage);
+                case "system" -> messages.add(new SystemMessage(concatenateText(uiMessage)));
+                default -> messages.add(toUserMessage(concatenateText(uiMessage), uiMessage, mediaResolver));
+            }
         }
         return messages;
+    }
+
+    /**
+     * The user's approve/deny decisions keyed by {@code toolCallId} — publish this in the prompt's tool
+     * context under {@link RecordingToolCallingManager#APPROVALS_KEY} so the approval gate can act on it.
+     */
+    public static Map<String, Boolean> toolApprovalDecisions(UiMessageRequest request) {
+        Map<String, Boolean> decisions = new LinkedHashMap<>();
+        if (request == null) {
+            return decisions;
+        }
+        for (UiMessageRequest.ToolApprovalDecision decision : request.approvals()) {
+            if (decision.toolCallId() != null) {
+                decisions.put(decision.toolCallId(), decision.approved());
+            }
+        }
+        return decisions;
+    }
+
+    private static void appendAssistant(List<Message> messages, UiMessageRequest.Message message) {
+        String text = concatenateText(message);
+        List<AssistantMessage.ToolCall> toolCalls = new ArrayList<>();
+        List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
+
+        if (message.parts() != null) {
+            for (UiMessageRequest.Part part : message.parts()) {
+                if (!part.isToolPart() || part.toolCallId() == null) {
+                    continue;
+                }
+                String name = part.resolvedToolName();
+                toolCalls.add(new AssistantMessage.ToolCall(part.toolCallId(), "function", name, toJson(part.input())));
+                reconstructResponse(responses, part, name);
+            }
+        }
+
+        if (toolCalls.isEmpty()) {
+            messages.add(new AssistantMessage(text));
+            return;
+        }
+        messages.add(AssistantMessage.builder().content(text).toolCalls(toolCalls).build());
+        if (!responses.isEmpty()) {
+            messages.add(ToolResponseMessage.builder().responses(responses).build());
+        }
+    }
+
+    private static void reconstructResponse(List<ToolResponseMessage.ToolResponse> responses,
+                                            UiMessageRequest.Part part, String name) {
+        String data = switch (part.state() == null ? "" : part.state()) {
+            case "output-available" -> part.output() != null ? toJson(part.output()) : null;
+            case "output-denied" -> DENIED_MESSAGE;
+            case "output-error" -> part.errorText() != null ? "Error: " + part.errorText() : null;
+            default -> null;
+        };
+        if (data != null) {
+            responses.add(new ToolResponseMessage.ToolResponse(part.toolCallId(), name, data));
+        }
     }
 
     private static UserMessage toUserMessage(String text, UiMessageRequest.Message message,
@@ -84,5 +154,20 @@ public final class UiMessageRequestAdapter {
             }
         }
         return text.toString();
+    }
+
+    /** Serializes a parsed input/output payload back to a JSON string for a Spring AI tool call/response. */
+    private static String toJson(Object value) {
+        if (value == null) {
+            return "{}";
+        }
+        if (value instanceof String string) {
+            return string;
+        }
+        try {
+            return JSON.writeValueAsString(value);
+        } catch (Exception e) {
+            return String.valueOf(value);
+        }
     }
 }

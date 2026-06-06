@@ -1,5 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
+import uz.uzinfoweb.uimessagestream.core.UiMessagePart;
 import uz.uzinfoweb.uimessagestream.core.UiMessageStreamWriter;
 
 import java.util.Objects;
@@ -106,5 +107,53 @@ public final class SerializedPartSink {
     /** Emits an {@code error} part. */
     public void error(String errorText) {
         run(w -> w.error(errorText));
+    }
+
+    /** Emits an arbitrary part (closing any open text/reasoning block first, per the writer's rules). */
+    public void part(UiMessagePart part) {
+        run(w -> w.part(part));
+    }
+
+    /** Emits {@code tool-input-available}, tagged {@code dynamic} when requested. */
+    public void toolInputAvailable(String toolCallId, String toolName, Object input, boolean dynamic) {
+        run(w -> w.part(new UiMessagePart.ToolInputAvailable(
+                toolCallId, toolName, input, null, null, dynamic ? Boolean.TRUE : null, null)));
+    }
+
+    /** Emits {@code tool-input-error} (the tool's input could not be parsed/validated). */
+    public void toolInputError(String toolCallId, String toolName, Object input, String errorText) {
+        run(w -> w.toolInputError(toolCallId, toolName, input, errorText));
+    }
+
+    /** Emits {@code tool-output-available}, tagged {@code dynamic} when requested. */
+    public void toolOutputAvailable(String toolCallId, Object output, boolean dynamic) {
+        run(w -> w.part(new UiMessagePart.ToolOutputAvailable(
+                toolCallId, output, null, dynamic ? Boolean.TRUE : null, null)));
+    }
+
+    /** Emits {@code tool-output-error} (the tool failed to produce a result). */
+    public void toolOutputError(String toolCallId, String errorText) {
+        run(w -> w.toolOutputError(toolCallId, errorText));
+    }
+
+    /** Emits {@code tool-output-error}, tagged {@code dynamic} when requested. */
+    public void toolOutputError(String toolCallId, String errorText, boolean dynamic) {
+        run(w -> w.part(new UiMessagePart.ToolOutputError(
+                toolCallId, errorText, null, dynamic ? Boolean.TRUE : null)));
+    }
+
+    /** Emits {@code tool-approval-request} — pauses for human approval of a tool call. */
+    public void toolApprovalRequest(String approvalId, String toolCallId) {
+        run(w -> w.toolApprovalRequest(approvalId, toolCallId));
+    }
+
+    /** Emits {@code tool-output-denied} — the user denied this tool call. */
+    public void toolOutputDenied(String toolCallId) {
+        run(w -> w.toolOutputDenied(toolCallId));
+    }
+
+    /** Emits {@code message-metadata} (does not close an open text/reasoning block). */
+    public void messageMetadata(Object metadata) {
+        run(w -> w.messageMetadata(metadata));
     }
 }

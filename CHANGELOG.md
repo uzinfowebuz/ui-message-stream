@@ -4,6 +4,51 @@ All notable changes to **ui-message-stream** are documented here. The format is 
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-06
+
+Completes the AI SDK **v6** wire surface (validated against `ai@6.0.0`) and adds the human-in-the-loop
+tool-approval flow.
+
+### Added
+
+- **New protocol parts** (across `UiMessagePart`, `UiMessageStreamWriter`, `SerializedPartSink`):
+  `tool-input-error`, `tool-output-error`, `message-metadata`, `tool-approval-request`, and
+  `tool-output-denied`.
+- **Optional protocol fields** threaded through the existing parts via convenience constructors
+  (null fields stay off the wire): `providerMetadata`, `providerExecuted`, `dynamic`, `title`,
+  `preliminary`, `filename`, `transient`, plus `finishReason` / `messageMetadata` on `finish`/`start`.
+- **`dynamic:true` by default** on tool parts, so a `useChat` client renders them via its generic
+  `dynamic-tool` path with no client-side tool typing. Configurable via
+  `ChatClientResponseMapper.withDynamicTools(boolean)`, the `RecordingToolCallingManager` constructor,
+  and the `uimessagestream.tool-io.dynamic` starter property (default `true`).
+- **Tool-call errors**: `RecordingToolCallingManager` emits `tool-output-error` for each in-flight
+  call when the delegated tool execution throws.
+- **Human-in-the-loop tool approval**:
+  - `ApprovalPolicy` SPI decides which calls require approval; the `RecordingToolCallingManager` gate
+    emits `tool-approval-request` and pauses the turn (`ToolExecutionResult.returnDirect()`) until the
+    user responds, emits `tool-output-denied` on a denial, and executes on approval.
+  - Inbound `UiMessageRequest` models tool parts (`state`, `input`/`output`, `approval`) and exposes
+    `approvals()`; `UiMessageRequestAdapter` reconstructs prior tool calls/responses for the resumed
+    turn (stateless replay) and exposes `toolApprovalDecisions(...)` for the gate's tool context.
+  - The starter registers a default no-op `ApprovalPolicy` (`@ConditionalOnMissingBean`) so the gate
+    stays opt-in.
+- **Generic writer hook** `UiMessageStreamWriter.part(UiMessagePart)` (and `SerializedPartSink.part`)
+  for emitting fully-specified parts while preserving the text-block lifecycle; it rejects
+  text/reasoning lifecycle parts so block-id ownership stays with the writer.
+
+### Changed
+
+- **`abort` carries no fields** to match v6 exactly: `UiMessageStreamWriter.abort()` is now
+  parameterless and `UiMessagePart.Abort` is a fieldless record (previously `abort(String reason)`).
+- `UiMessageRequest.Part` gained tool/approval components; the four-arg
+  `Part(type, text, url, mediaType)` convenience constructor is retained for text/file/data parts.
+
+### Notes
+
+- Pin the AI SDK to `ai@^6.0.0` (latest stable `6.0.x`); the stream header stays
+  `x-vercel-ai-ui-message-stream: v1`. v7-only chunks (`custom`, `reasoning-file`, and
+  `tool-approval-response` as a stream chunk) are intentionally not implemented.
+
 ## [0.1.0] - 2026-06-05
 
 First public release. Built against Spring Boot 4.0.6 (Spring Framework 7) and Spring AI 2.0.0-M8,
@@ -36,4 +81,5 @@ Java 25.
 - **OSS readiness**: Apache-2.0 `LICENSE` + `NOTICE`, complete POM metadata, and a `release` profile
   (sources + javadoc jars, GPG signing, `central-publishing-maven-plugin`) for Maven Central.
 
+[0.2.0]: https://github.com/uzinfoweb/ui-message-stream/releases/tag/v0.2.0
 [0.1.0]: https://github.com/uzinfoweb/ui-message-stream/releases/tag/v0.1.0

@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("UiMessageStreamWriter")
 class UiMessageStreamWriterTest {
@@ -121,9 +122,53 @@ class UiMessageStreamWriterTest {
         parts.clear();
         UiMessageStreamWriter aborting = newWriter();
         aborting.text("hi");
-        aborting.abort("client-disconnect");
+        aborting.abort(); // v6 abort carries no fields
         aborting.finish(); // suppressed after abort
 
         assertThat(types()).containsExactly("text-start", "text-delta", "text-end", "abort");
+        assertThat(serializer.serialize(parts.get(3))).isEqualTo("{\"type\":\"abort\"}");
+    }
+
+    @Test
+    @DisplayName("new tool/approval parts close the open text block; message-metadata does not")
+    void newPartsLifecycle() {
+        UiMessageStreamWriter writer = newWriter();
+        writer.text("working");
+        writer.messageMetadata(Map.of("model", "gemini")); // must NOT close the text block
+        writer.text("more");
+        writer.toolOutputError("call-1", "boom");          // must close the text block
+        writer.toolApprovalRequest("appr-1", "call-1");
+        writer.toolOutputDenied("call-1");
+        writer.finish();
+
+        assertThat(types()).containsExactly(
+                "text-start", "text-delta", "message-metadata", "text-delta", "text-end",
+                "tool-output-error", "tool-approval-request", "tool-output-denied",
+                "finish-step", "finish");
+
+        // The two deltas straddling message-metadata share one id (the block never closed).
+        assertThat(((UiMessagePart.TextDelta) parts.get(1)).id())
+                .isEqualTo(((UiMessagePart.TextDelta) parts.get(3)).id());
+    }
+
+    @Test
+    @DisplayName("part() rejects text/reasoning lifecycle parts so the writer keeps id ownership")
+    void partRejectsTextLifecycle() {
+        UiMessageStreamWriter writer = newWriter();
+        assertThatThrownBy(() -> writer.part(new UiMessagePart.TextDelta("x", "y")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> writer.part(new UiMessagePart.ReasoningStart("x")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("finish(reason, metadata) carries the optional fields")
+    void finishWithReasonAndMetadata() {
+        UiMessageStreamWriter writer = newWriter();
+        writer.text("done");
+        writer.finish("stop", Map.of("tokens", 7));
+
+        assertThat(serializer.serialize(parts.getLast()))
+                .isEqualTo("{\"type\":\"finish\",\"finishReason\":\"stop\",\"messageMetadata\":{\"tokens\":7}}");
     }
 }

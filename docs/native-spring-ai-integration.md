@@ -269,3 +269,30 @@ Whether to actually **ship** Seam A/B in `ui-message-stream-spring` (as an opt-i
 library a pure mapper and publish this only as a recipe is a **purity trade-off** that needs an explicit
 call before any code is added. This document is the research; it intentionally adds **no** new production
 code.
+
+## 12. Shipped (v0.2.0): Seam A + the human-in-the-loop approval gate
+
+The §11 trade-off was resolved in favour of shipping Seam A as opt-in. As of **0.2.0**:
+
+- **`RecordingToolCallingManager`** (Seam A) is shipped, wired by the starter behind
+  `uimessagestream.tool-io.native=true` (`@ConditionalOnMissingBean`, off by default). It emits
+  `tool-input-available` + `tool-output-available`, and now `tool-output-error` when the delegated
+  execution throws.
+- **The approval gate** is built on the same seam. An `ApprovalPolicy` (default `ApprovalPolicy.NONE`,
+  so HITL stays opt-in) is consulted per call inside `executeToolCalls`:
+  - a gated, undecided call emits `tool-approval-request` and **pauses the turn** by returning a
+    `ToolExecutionResult` with `returnDirect=true`. Confirmed against the 2.0.0-M8 contract
+    (`ToolExecutionResult.FINISH_REASON == "returnDirect"`), this terminates the model's tool loop and
+    hands control to the caller, so the SSE stream finishes cleanly after the request frame;
+  - a denied call emits `tool-output-denied` and feeds the model a denial `ToolResponseMessage`
+    (`returnDirect=false`) so it can respond;
+  - an approved call executes normally.
+- The user's decision arrives on the next request **on the tool part** (`state:"approval-responded"`,
+  `approval:{ id, approved, reason? }`). `UiMessageRequest.approvals()` and
+  `UiMessageRequestAdapter.toolApprovalDecisions(...)` extract it; the app publishes the resulting
+  `Map<toolCallId, Boolean>` in the tool context under `RecordingToolCallingManager.APPROVALS_KEY`, and
+  `UiMessageRequestAdapter` replays the prior tool turns so the resumed model call has context.
+
+Cross-request continuity is intentionally the application's responsibility (stateless replay, keyed by a
+stable `toolCallId`); the library ships the wire parts, the inbound parsing and the gate — not a
+server-side session store. Seams B–E remain research, as above.
