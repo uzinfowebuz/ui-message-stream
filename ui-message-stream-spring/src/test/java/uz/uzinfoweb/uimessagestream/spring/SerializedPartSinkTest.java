@@ -93,6 +93,23 @@ class SerializedPartSinkTest {
         assertThat(dataParts).isEqualTo(n);
     }
 
+    @Test
+    @DisplayName("the new tool/approval/metadata methods delegate to the bound writer")
+    void newMethodsDelegate() {
+        List<UiMessagePart> parts = new ArrayList<>();
+        SerializedPartSink sink = new SerializedPartSink();
+        sink.bind(new UiMessageStreamWriter(parts::add));
+
+        sink.toolOutputError("call_1", "boom");
+        sink.toolApprovalRequest("appr_1", "call_1");
+        sink.toolOutputDenied("call_1");
+        sink.messageMetadata(Map.of("k", "v"));
+
+        assertThat(parts.stream().map(UiMessagePart::type).toList())
+                .containsExactly("tool-output-error", "tool-approval-request", "tool-output-denied",
+                        "message-metadata");
+    }
+
     private static void awaitQuietly(CountDownLatch latch) {
         try {
             latch.await(5, TimeUnit.SECONDS);

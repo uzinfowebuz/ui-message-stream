@@ -67,4 +67,54 @@ class PartSerializerTest {
         assertThat(serializer.serialize(new UiMessagePart.FilePart("https://x/y.png", "image/png")))
                 .isEqualTo("{\"type\":\"file\",\"url\":\"https://x/y.png\",\"mediaType\":\"image/png\"}");
     }
+
+    @Test
+    @DisplayName("new v6 part types serialize exactly")
+    void newV6Parts() {
+        assertThat(serializer.serialize(
+                new UiMessagePart.ToolInputError("call-1", "getWeather", Map.of("city", "NYC"), "bad input")))
+                .isEqualTo("{\"type\":\"tool-input-error\",\"toolCallId\":\"call-1\","
+                        + "\"toolName\":\"getWeather\",\"input\":{\"city\":\"NYC\"},\"errorText\":\"bad input\"}");
+
+        assertThat(serializer.serialize(new UiMessagePart.ToolOutputError("call-1", "boom")))
+                .isEqualTo("{\"type\":\"tool-output-error\",\"toolCallId\":\"call-1\",\"errorText\":\"boom\"}");
+
+        assertThat(serializer.serialize(new UiMessagePart.MessageMetadata(Map.of("model", "gemini"))))
+                .isEqualTo("{\"type\":\"message-metadata\",\"messageMetadata\":{\"model\":\"gemini\"}}");
+
+        assertThat(serializer.serialize(new UiMessagePart.ToolApprovalRequest("appr-1", "call-1")))
+                .isEqualTo("{\"type\":\"tool-approval-request\",\"approvalId\":\"appr-1\",\"toolCallId\":\"call-1\"}");
+
+        assertThat(serializer.serialize(new UiMessagePart.ToolOutputDenied("call-1")))
+                .isEqualTo("{\"type\":\"tool-output-denied\",\"toolCallId\":\"call-1\"}");
+
+        assertThat(serializer.serialize(new UiMessagePart.Abort()))
+                .isEqualTo("{\"type\":\"abort\"}");
+    }
+
+    @Test
+    @DisplayName("optional protocol fields are included when present, in wire order")
+    void optionalFieldsPresent() {
+        assertThat(serializer.serialize(new UiMessagePart.ToolInputAvailable(
+                "call-1", "getWeather", Map.of("city", "NYC"), true, null, true, null)))
+                .isEqualTo("{\"type\":\"tool-input-available\",\"toolCallId\":\"call-1\","
+                        + "\"toolName\":\"getWeather\",\"input\":{\"city\":\"NYC\"},"
+                        + "\"providerExecuted\":true,\"dynamic\":true}");
+
+        assertThat(serializer.serialize(new UiMessagePart.ToolOutputAvailable(
+                "call-1", Map.of("tempC", 21), null, true, true)))
+                .isEqualTo("{\"type\":\"tool-output-available\",\"toolCallId\":\"call-1\","
+                        + "\"output\":{\"tempC\":21},\"dynamic\":true,\"preliminary\":true}");
+
+        assertThat(serializer.serialize(new UiMessagePart.DataPart("status", null, Map.of("s", "thinking"), true)))
+                .isEqualTo("{\"type\":\"data-status\",\"data\":{\"s\":\"thinking\"},\"transient\":true}");
+
+        assertThat(serializer.serialize(new UiMessagePart.Finish("stop", Map.of("tokens", 42))))
+                .isEqualTo("{\"type\":\"finish\",\"finishReason\":\"stop\",\"messageMetadata\":{\"tokens\":42}}");
+
+        assertThat(serializer.serialize(
+                new UiMessagePart.SourceDocument("s1", "application/pdf", "Doc", "d.pdf", null)))
+                .isEqualTo("{\"type\":\"source-document\",\"sourceId\":\"s1\",\"mediaType\":\"application/pdf\","
+                        + "\"title\":\"Doc\",\"filename\":\"d.pdf\"}");
+    }
 }
