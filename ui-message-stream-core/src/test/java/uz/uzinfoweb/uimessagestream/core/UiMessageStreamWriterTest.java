@@ -130,6 +130,19 @@ class UiMessageStreamWriterTest {
     }
 
     @Test
+    @DisplayName("abort(reason) emits the optional reason and still suppresses a later finish")
+    void abortWithReason() {
+        UiMessageStreamWriter writer = newWriter();
+        writer.text("hi");
+        writer.abort("user cancelled");
+        writer.finish(); // suppressed after abort
+
+        assertThat(types()).containsExactly("text-start", "text-delta", "text-end", "abort");
+        assertThat(serializer.serialize(parts.get(3)))
+                .isEqualTo("{\"type\":\"abort\",\"reason\":\"user cancelled\"}");
+    }
+
+    @Test
     @DisplayName("new tool/approval parts close the open text block; message-metadata does not")
     void newPartsLifecycle() {
         UiMessageStreamWriter writer = newWriter();

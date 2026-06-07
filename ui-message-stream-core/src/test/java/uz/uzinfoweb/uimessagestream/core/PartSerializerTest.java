@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 @DisplayName("PartSerializer")
 class PartSerializerTest {
@@ -34,9 +35,10 @@ class PartSerializerTest {
     @Test
     @DisplayName("null fields are omitted entirely")
     void nullFieldsAreOmitted() {
-        // title is null -> dropped
-        assertThat(serializer.serialize(new UiMessagePart.SourceDocument("s1", "text/plain", null)))
-                .isEqualTo("{\"type\":\"source-document\",\"sourceId\":\"s1\",\"mediaType\":\"text/plain\"}");
+        // optional filename/providerMetadata absent -> dropped (title is required and present)
+        assertThat(serializer.serialize(new UiMessagePart.SourceDocument("s1", "text/plain", "Title")))
+                .isEqualTo("{\"type\":\"source-document\",\"sourceId\":\"s1\",\"mediaType\":\"text/plain\","
+                        + "\"title\":\"Title\"}");
 
         // optional reconciliation id absent -> dropped
         assertThat(serializer.serialize(new UiMessagePart.DataPart("weather", null, Map.of("city", "NYC"))))
@@ -96,13 +98,13 @@ class PartSerializerTest {
     @DisplayName("optional protocol fields are included when present, in wire order")
     void optionalFieldsPresent() {
         assertThat(serializer.serialize(new UiMessagePart.ToolInputAvailable(
-                "call-1", "getWeather", Map.of("city", "NYC"), true, null, true, null)))
+                "call-1", "getWeather", Map.of("city", "NYC"), true, null, null, true, null)))
                 .isEqualTo("{\"type\":\"tool-input-available\",\"toolCallId\":\"call-1\","
                         + "\"toolName\":\"getWeather\",\"input\":{\"city\":\"NYC\"},"
                         + "\"providerExecuted\":true,\"dynamic\":true}");
 
         assertThat(serializer.serialize(new UiMessagePart.ToolOutputAvailable(
-                "call-1", Map.of("tempC", 21), null, true, true)))
+                "call-1", Map.of("tempC", 21), null, null, null, true, true)))
                 .isEqualTo("{\"type\":\"tool-output-available\",\"toolCallId\":\"call-1\","
                         + "\"output\":{\"tempC\":21},\"dynamic\":true,\"preliminary\":true}");
 
@@ -116,5 +118,44 @@ class PartSerializerTest {
                 new UiMessagePart.SourceDocument("s1", "application/pdf", "Doc", "d.pdf", null)))
                 .isEqualTo("{\"type\":\"source-document\",\"sourceId\":\"s1\",\"mediaType\":\"application/pdf\","
                         + "\"title\":\"Doc\",\"filename\":\"d.pdf\"}");
+    }
+
+    @Test
+    @DisplayName("v6.0.197 optional tool fields (providerMetadata, toolMetadata) serialize when set")
+    void toolMetadataAndProviderMetadataSerialize() {
+        // tool-input-start: both providerMetadata and toolMetadata were added after 6.0.0
+        assertThat(serializer.serialize(new UiMessagePart.ToolInputStart(
+                "call-1", "getWeather", null, Map.of("openai", Map.of("cached", true)),
+                Map.of("group", "weather"), null, null)))
+                .isEqualTo("{\"type\":\"tool-input-start\",\"toolCallId\":\"call-1\",\"toolName\":\"getWeather\","
+                        + "\"providerMetadata\":{\"openai\":{\"cached\":true}},\"toolMetadata\":{\"group\":\"weather\"}}");
+
+        // tool-output-available: providerMetadata + toolMetadata also added after 6.0.0
+        assertThat(serializer.serialize(new UiMessagePart.ToolOutputAvailable(
+                "call-1", Map.of("tempC", 21), null, Map.of("openai", Map.of("ok", true)),
+                Map.of("group", "weather"), null, null)))
+                .isEqualTo("{\"type\":\"tool-output-available\",\"toolCallId\":\"call-1\",\"output\":{\"tempC\":21},"
+                        + "\"providerMetadata\":{\"openai\":{\"ok\":true}},\"toolMetadata\":{\"group\":\"weather\"}}");
+    }
+
+    @Test
+    @DisplayName("abort carries an optional reason when set, and is fieldless otherwise")
+    void abortReason() {
+        assertThat(serializer.serialize(new UiMessagePart.Abort())).isEqualTo("{\"type\":\"abort\"}");
+        assertThat(serializer.serialize(new UiMessagePart.Abort("user cancelled")))
+                .isEqualTo("{\"type\":\"abort\",\"reason\":\"user cancelled\"}");
+    }
+
+    @Test
+    @DisplayName("required string fields reject null so no strict-invalid frame can be emitted")
+    void requiredFieldsRejectNull() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> new UiMessagePart.SourceDocument("s1", "text/plain", null));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new UiMessagePart.ErrorPart(null));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new UiMessagePart.ToolOutputError("call-1", null));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new UiMessagePart.ToolInputError("call-1", "getWeather", Map.of(), null));
     }
 }

@@ -6,7 +6,7 @@ All notable changes to **ui-message-stream** are documented here. The format is 
 
 ## [0.2.0] - 2026-06-06
 
-Completes the AI SDK **v6** wire surface (validated against `ai@6.0.0`) and adds the human-in-the-loop
+Completes the AI SDK **v6** wire surface (validated against `ai@6.0.197`) and adds the human-in-the-loop
 tool-approval flow.
 
 ### Added
@@ -15,8 +15,11 @@ tool-approval flow.
   `tool-input-error`, `tool-output-error`, `message-metadata`, `tool-approval-request`, and
   `tool-output-denied`.
 - **Optional protocol fields** threaded through the existing parts via convenience constructors
-  (null fields stay off the wire): `providerMetadata`, `providerExecuted`, `dynamic`, `title`,
-  `preliminary`, `filename`, `transient`, plus `finishReason` / `messageMetadata` on `finish`/`start`.
+  (null fields stay off the wire): `providerMetadata`, `toolMetadata`, `providerExecuted`, `dynamic`,
+  `title`, `preliminary`, `filename`, `transient`, `reason` (on `abort`), plus `finishReason` /
+  `messageMetadata` on `finish`/`start`. `toolMetadata` (all five tool chunks), `providerMetadata`
+  (additionally on `tool-input-start` / `tool-output-available` / `tool-output-error`), and
+  `abort.reason` are the optional fields the `ai` package added across the `6.0.x` line after `6.0.0`.
 - **`dynamic:true` by default** on tool parts, so a `useChat` client renders them via its generic
   `dynamic-tool` path with no client-side tool typing. Configurable via
   `ChatClientResponseMapper.withDynamicTools(boolean)`, the `RecordingToolCallingManager` constructor,
@@ -38,14 +41,18 @@ tool-approval flow.
 
 ### Changed
 
-- **`abort` carries no fields** to match v6 exactly: `UiMessageStreamWriter.abort()` is now
-  parameterless and `UiMessagePart.Abort` is a fieldless record (previously `abort(String reason)`).
+- **`abort` reason is optional**: `UiMessageStreamWriter` offers both `abort()` and `abort(String
+  reason)`, and `UiMessagePart.Abort` carries a nullable `reason` (omitted when null) — matching
+  `ai@6.0.197`, where the `abort` chunk gained an optional `reason` field after `6.0.0`.
+- **Required-field guards**: `Objects.requireNonNull` now rejects a null `title` on `source-document`
+  and a null `errorText` on `error` / `tool-input-error` / `tool-output-error`, so a careless null can
+  no longer omit a key that the strict (`z.strictObject`) client schema requires.
 - `UiMessageRequest.Part` gained tool/approval components; the four-arg
   `Part(type, text, url, mediaType)` convenience constructor is retained for text/file/data parts.
 
 ### Notes
 
-- Pin the AI SDK to `ai@^6.0.0` (latest stable `6.0.x`); the stream header stays
+- Pin the AI SDK to `ai@^6.0.0` (covers `6.0.197`, the latest stable `6.0.x`); the stream header stays
   `x-vercel-ai-ui-message-stream: v1`. v7-only chunks (`custom`, `reasoning-file`, and
   `tool-approval-response` as a stream chunk) are intentionally not implemented.
 

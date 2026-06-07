@@ -117,7 +117,7 @@ public final class SerializedPartSink {
     /** Emits {@code tool-input-available}, tagged {@code dynamic} when requested. */
     public void toolInputAvailable(String toolCallId, String toolName, Object input, boolean dynamic) {
         run(w -> w.part(new UiMessagePart.ToolInputAvailable(
-                toolCallId, toolName, input, null, null, dynamic ? Boolean.TRUE : null, null)));
+                toolCallId, toolName, input, null, null, null, dynamic ? Boolean.TRUE : null, null)));
     }
 
     /** Emits {@code tool-input-error} (the tool's input could not be parsed/validated). */
@@ -128,7 +128,7 @@ public final class SerializedPartSink {
     /** Emits {@code tool-output-available}, tagged {@code dynamic} when requested. */
     public void toolOutputAvailable(String toolCallId, Object output, boolean dynamic) {
         run(w -> w.part(new UiMessagePart.ToolOutputAvailable(
-                toolCallId, output, null, dynamic ? Boolean.TRUE : null, null)));
+                toolCallId, output, null, null, null, dynamic ? Boolean.TRUE : null, null)));
     }
 
     /** Emits {@code tool-output-error} (the tool failed to produce a result). */
@@ -139,7 +139,7 @@ public final class SerializedPartSink {
     /** Emits {@code tool-output-error}, tagged {@code dynamic} when requested. */
     public void toolOutputError(String toolCallId, String errorText, boolean dynamic) {
         run(w -> w.part(new UiMessagePart.ToolOutputError(
-                toolCallId, errorText, null, dynamic ? Boolean.TRUE : null)));
+                toolCallId, errorText, null, null, null, dynamic ? Boolean.TRUE : null)));
     }
 
     /** Emits {@code tool-approval-request} — pauses for human approval of a tool call. */

@@ -24,10 +24,11 @@ Spring AI backend to a `useChat` frontend.
   - `data-<name>` — generic application data; optional `id` reconciles/updates the part in place
   - `message-metadata`, `error` (`errorText`)
   - `finish-step`, `finish`, `abort`
-- **Optional fields** — `providerMetadata`, `providerExecuted`, `dynamic`, `title`, `preliminary`,
-  `filename`, `transient`, `finishReason`/`messageMetadata` are emitted when set and omitted when not.
+- **Optional fields** — `providerMetadata`, `toolMetadata`, `providerExecuted`, `dynamic`, `title`,
+  `preliminary`, `filename`, `transient`, `reason` (on `abort`), `finishReason`/`messageMetadata` are
+  emitted when set and omitted when not.
   Tool parts default to `dynamic:true` (rendered via the client's generic `dynamic-tool` path).
-  Validated against `ai@6.0.0`; pin `ai@^6.0.0`.
+  Validated against `ai@6.0.197`; pin `ai@^6.0.0` (covers all `6.0.x`).
 
 ## The two invariants this library enforces
 
