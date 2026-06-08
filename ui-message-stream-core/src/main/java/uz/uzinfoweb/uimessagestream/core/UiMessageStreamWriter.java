@@ -197,16 +197,22 @@ public final class UiMessageStreamWriter {
         terminated = true;
     }
 
-    /**
-     * Closes any open block, then emits an {@code abort} part. Marks the stream terminated so a
-     * later defensive {@link #finish} is a no-op. The v6 {@code abort} frame carries no fields.
-     */
+    /** Closes any open block, then emits a fieldless {@code abort}. Idempotent (delegates to {@link #abort(String)}). */
     public void abort() {
+        abort(null);
+    }
+
+    /**
+     * Closes any open block, then emits an {@code abort} part carrying an optional {@code reason}
+     * ({@code null} omits it). Marks the stream terminated so a later defensive {@link #finish} is a
+     * no-op. The {@code reason} field was added to the {@code abort} chunk in the v6 {@code 6.0.x} line.
+     */
+    public void abort(String reason) {
         if (terminated) {
             return;
         }
         closeOpenBlock();
-        emit(new UiMessagePart.Abort());
+        emit(new UiMessagePart.Abort(reason));
         terminated = true;
     }
 

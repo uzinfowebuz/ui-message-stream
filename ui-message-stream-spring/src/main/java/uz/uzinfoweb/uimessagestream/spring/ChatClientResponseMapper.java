@@ -95,7 +95,7 @@ public final class ChatClientResponseMapper {
                     continue;
                 }
                 writer.part(new UiMessagePart.ToolInputAvailable(call.id(), call.name(),
-                        parseArguments(call.arguments()), null, null, dynamicTools ? Boolean.TRUE : null, null));
+                        parseArguments(call.arguments()), null, null, null, dynamicTools ? Boolean.TRUE : null, null));
             }
         }
     }

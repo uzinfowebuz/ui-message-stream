@@ -9,7 +9,7 @@ import java.util.Objects;
  *
  * <p>This is a closed (sealed) set of records — exactly one per wire {@code type} described at
  * <a href="https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol">ai-sdk.dev/docs/ai-sdk-ui/stream-protocol</a>
- * and matching the chunk union in {@code vercel/ai} at tag {@code ai@6.0.0}
+ * and matching the chunk union in {@code vercel/ai} at tag {@code ai@6.0.197}
  * ({@code packages/ai/src/ui-message-stream/ui-message-chunks.ts}). Each record knows its wire
  * {@link #type()} and renders its remaining fields, in order, via {@link #body()}.
  * {@link PartSerializer} turns a part into compact JSON with {@code "type"} first and {@code null}
@@ -133,14 +133,17 @@ public sealed interface UiMessagePart
 
     // --- Tool input / output ----------------------------------------------------------------
 
-    /** {@code {"type":"tool-input-start","toolCallId":"...","toolName":"...","providerExecuted":...,"dynamic":...,"title":"..."}} */
-    record ToolInputStart(String toolCallId, String toolName, Boolean providerExecuted, Boolean dynamic,
-                          String title) implements UiMessagePart {
-        public ToolInputStart(String toolCallId, String toolName) { this(toolCallId, toolName, null, null, null); }
+    /** {@code {"type":"tool-input-start","toolCallId":"...","toolName":"...","providerExecuted":...,"providerMetadata":...,"toolMetadata":...,"dynamic":...,"title":"..."}} */
+    record ToolInputStart(String toolCallId, String toolName, Boolean providerExecuted, Object providerMetadata,
+                          Object toolMetadata, Boolean dynamic, String title) implements UiMessagePart {
+        public ToolInputStart(String toolCallId, String toolName) {
+            this(toolCallId, toolName, null, null, null, null, null);
+        }
         public String type() { return "tool-input-start"; }
         public Map<String, Object> body() {
             return fields("toolCallId", toolCallId, "toolName", toolName,
-                    "providerExecuted", providerExecuted, "dynamic", dynamic, "title", title);
+                    "providerExecuted", providerExecuted, "providerMetadata", providerMetadata,
+                    "toolMetadata", toolMetadata, "dynamic", dynamic, "title", title);
         }
     }
 
@@ -152,52 +155,65 @@ public sealed interface UiMessagePart
 
     /** {@code {"type":"tool-input-available","toolCallId":"...","toolName":"...","input":{...},...}} */
     record ToolInputAvailable(String toolCallId, String toolName, Object input, Boolean providerExecuted,
-                              Object providerMetadata, Boolean dynamic, String title) implements UiMessagePart {
+                              Object providerMetadata, Object toolMetadata, Boolean dynamic, String title)
+            implements UiMessagePart {
         public ToolInputAvailable(String toolCallId, String toolName, Object input) {
-            this(toolCallId, toolName, input, null, null, null, null);
+            this(toolCallId, toolName, input, null, null, null, null, null);
         }
         public String type() { return "tool-input-available"; }
         public Map<String, Object> body() {
             return fields("toolCallId", toolCallId, "toolName", toolName, "input", input,
                     "providerExecuted", providerExecuted, "providerMetadata", providerMetadata,
-                    "dynamic", dynamic, "title", title);
+                    "toolMetadata", toolMetadata, "dynamic", dynamic, "title", title);
         }
     }
 
     /** {@code {"type":"tool-input-error","toolCallId":"...","toolName":"...","input":{...},"errorText":"...",...}} */
     record ToolInputError(String toolCallId, String toolName, Object input, String errorText,
-                          Boolean providerExecuted, Object providerMetadata, Boolean dynamic, String title)
-            implements UiMessagePart {
+                          Boolean providerExecuted, Object providerMetadata, Object toolMetadata,
+                          Boolean dynamic, String title) implements UiMessagePart {
+        public ToolInputError {
+            Objects.requireNonNull(errorText, "tool-input-error errorText");
+        }
         public ToolInputError(String toolCallId, String toolName, Object input, String errorText) {
-            this(toolCallId, toolName, input, errorText, null, null, null, null);
+            this(toolCallId, toolName, input, errorText, null, null, null, null, null);
         }
         public String type() { return "tool-input-error"; }
         public Map<String, Object> body() {
             return fields("toolCallId", toolCallId, "toolName", toolName, "input", input, "errorText", errorText,
                     "providerExecuted", providerExecuted, "providerMetadata", providerMetadata,
-                    "dynamic", dynamic, "title", title);
+                    "toolMetadata", toolMetadata, "dynamic", dynamic, "title", title);
         }
     }
 
-    /** {@code {"type":"tool-output-available","toolCallId":"...","output":{...},"providerExecuted":...,"dynamic":...,"preliminary":...}} */
-    record ToolOutputAvailable(String toolCallId, Object output, Boolean providerExecuted, Boolean dynamic,
-                               Boolean preliminary) implements UiMessagePart {
-        public ToolOutputAvailable(String toolCallId, Object output) { this(toolCallId, output, null, null, null); }
+    /** {@code {"type":"tool-output-available","toolCallId":"...","output":{...},"providerExecuted":...,"providerMetadata":...,"toolMetadata":...,"dynamic":...,"preliminary":...}} */
+    record ToolOutputAvailable(String toolCallId, Object output, Boolean providerExecuted, Object providerMetadata,
+                               Object toolMetadata, Boolean dynamic, Boolean preliminary) implements UiMessagePart {
+        public ToolOutputAvailable(String toolCallId, Object output) {
+            this(toolCallId, output, null, null, null, null, null);
+        }
         public String type() { return "tool-output-available"; }
         public Map<String, Object> body() {
             return fields("toolCallId", toolCallId, "output", output,
-                    "providerExecuted", providerExecuted, "dynamic", dynamic, "preliminary", preliminary);
+                    "providerExecuted", providerExecuted, "providerMetadata", providerMetadata,
+                    "toolMetadata", toolMetadata, "dynamic", dynamic, "preliminary", preliminary);
         }
     }
 
-    /** {@code {"type":"tool-output-error","toolCallId":"...","errorText":"...","providerExecuted":...,"dynamic":...}} */
-    record ToolOutputError(String toolCallId, String errorText, Boolean providerExecuted, Boolean dynamic)
-            implements UiMessagePart {
-        public ToolOutputError(String toolCallId, String errorText) { this(toolCallId, errorText, null, null); }
+    /** {@code {"type":"tool-output-error","toolCallId":"...","errorText":"...","providerExecuted":...,"providerMetadata":...,"toolMetadata":...,"dynamic":...}} */
+    record ToolOutputError(String toolCallId, String errorText, Boolean providerExecuted, Object providerMetadata,
+                           Object toolMetadata, Boolean dynamic) implements UiMessagePart {
+        public ToolOutputError {
+            Objects.requireNonNull(errorText, "tool-output-error errorText");
+        }
+        public ToolOutputError(String toolCallId, String errorText) {
+            this(toolCallId, errorText, null, null, null, null);
+        }
         public String type() { return "tool-output-error"; }
         public Map<String, Object> body() {
             return fields("toolCallId", toolCallId, "errorText", errorText,
-                    "providerExecuted", providerExecuted, "dynamic", dynamic);
+                    "providerExecuted", providerExecuted, "providerMetadata", providerMetadata,
+                    "toolMetadata", toolMetadata, "dynamic", dynamic);
         }
     }
 
@@ -229,6 +245,9 @@ public sealed interface UiMessagePart
     /** {@code {"type":"source-document","sourceId":"...","mediaType":"...","title":"...","filename":"...","providerMetadata":...}} */
     record SourceDocument(String sourceId, String mediaType, String title, String filename,
                           Object providerMetadata) implements UiMessagePart {
+        public SourceDocument {
+            Objects.requireNonNull(title, "source-document title");
+        }
         public SourceDocument(String sourceId, String mediaType, String title) {
             this(sourceId, mediaType, title, null, null);
         }
@@ -278,6 +297,9 @@ public sealed interface UiMessagePart
 
     /** {@code {"type":"error","errorText":"..."}} */
     record ErrorPart(String errorText) implements UiMessagePart {
+        public ErrorPart {
+            Objects.requireNonNull(errorText, "error errorText");
+        }
         public String type() { return "error"; }
         public Map<String, Object> body() { return fields("errorText", errorText); }
     }
@@ -303,9 +325,10 @@ public sealed interface UiMessagePart
         }
     }
 
-    /** {@code {"type":"abort"}} — v6 carries no fields. */
-    record Abort() implements UiMessagePart {
+    /** {@code {"type":"abort","reason":"..."}} — {@code reason} is optional (added in the v6 {@code 6.0.x} line). */
+    record Abort(String reason) implements UiMessagePart {
+        public Abort() { this(null); }
         public String type() { return "abort"; }
-        public Map<String, Object> body() { return fields(); }
+        public Map<String, Object> body() { return fields("reason", reason); }
     }
 }
