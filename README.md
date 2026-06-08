@@ -53,13 +53,29 @@ Built against Spring Boot 4.0.6 (Spring Framework 7) and Spring AI 2.0.0-M8, Jav
 
 ## Install
 
+Distributed via **[JitPack](https://jitpack.io/#uzinfowebuz/ui-message-stream)** — no Maven Central
+release required. JitPack builds the modules on demand from a pushed git tag. Add the JitPack
+repository and depend on the starter using JitPack's multi-module coordinate
+(`com.github.<user>.<repo>:<module>:<tag>`):
+
 ```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
 <dependency>
-    <groupId>uz.uzinfoweb</groupId>
+    <groupId>com.github.uzinfowebuz.ui-message-stream</groupId>
     <artifactId>ui-message-stream-spring-boot-starter</artifactId>
     <version>0.2.0</version>
 </dependency>
 ```
+
+> The `version` is the git **tag** (e.g. `0.1.0`); use `master-SNAPSHOT` to track the latest commit.
+> Because the project targets Java 25, [`jitpack.yml`](jitpack.yml) provisions a Temurin 25 JDK via
+> SDKMAN before building. Publishing a release is just: `git tag 0.1.0 && git push origin 0.1.0`.
 
 The starter brings `core` + `spring` transitively and auto-registers the default `ResponseMapper`
 (`@ConditionalOnMissingBean`). The library's own Spring / Reactor / Spring AI dependencies are

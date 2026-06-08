@@ -2,8 +2,13 @@
 #
 # This library targets Java 25, which JitPack's default build image does not ship.
 # We provision Temurin 25 through SDKMAN (the documented way to select a specific JDK),
-# activate it for the build shell, then run the exact Maven build JitPack would run by
-# default (./mvnw install) — adding `clean` for a reproducible artifact set.
+# activate it for the build shell, restore the Maven wrapper's executable bit, then run the
+# Maven build (`./mvnw clean install`) — `clean` keeps the published artifact set reproducible.
+#
+# Why `chmod +x mvnw`: this repo is committed from Windows, which does not preserve the Unix
+# executable bit, so JitPack's Linux build image otherwise fails at `./mvnw` with
+# "Permission denied" (exit 126). A permanent alternative is to set the bit in git itself:
+# `git update-index --chmod=+x mvnw` (then commit) — doing both is harmless.
 #
 # If "25.0.2-tem" is not available on the build image, bump it to any 25.x.y-tem listed by
 # `sdk list java` (Temurin 25 GA or later); the only requirement is a JDK >= 25.
@@ -12,4 +17,5 @@ before_install:
   - sdk install java 25.0.2-tem
   - sdk use java 25.0.2-tem
 install:
+  - chmod +x mvnw
   - ./mvnw clean install -DskipTests
