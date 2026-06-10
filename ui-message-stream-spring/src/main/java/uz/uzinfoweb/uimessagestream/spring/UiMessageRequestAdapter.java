@@ -17,11 +17,18 @@ import java.util.Objects;
 /**
  * Converts an inbound {@link UiMessageRequest} into Spring AI {@link Message}s.
  *
- * <p>Text parts are concatenated and mapped to {@link UserMessage}/{@link AssistantMessage}/
- * {@link SystemMessage} by role (defaulting to user). {@code file} parts on a user message are turned
- * into {@link Media} via a {@link MediaResolver} (the {@linkplain MediaResolver#DEFAULT URL-based
- * default} unless you pass your own) and attached to the {@link UserMessage}; a part the resolver
- * cannot handle is skipped without failing the request.
+ * <p>Text parts are concatenated and mapped to {@link UserMessage}/{@link AssistantMessage} by role
+ * (defaulting to user). {@code file} parts on a user message are turned into {@link Media} via a
+ * {@link MediaResolver} (the {@linkplain MediaResolver#DEFAULT URL-based default} unless you pass
+ * your own) and attached to the {@link UserMessage}; a part the resolver cannot handle is skipped
+ * without failing the request.
+ *
+ * <p><b>System messages are dropped by default.</b> The request body is attacker-controlled (anyone
+ * who can reach the endpoint can POST arbitrary JSON, and {@code useChat} itself never sends a
+ * {@code system} role), so honouring an inbound {@code role:"system"} message would let a client
+ * inject or override the application's system prompt. Set the system prompt server-side instead. An
+ * application that deliberately round-trips its own system message through the client can opt in via
+ * {@link #toSpringAiMessages(UiMessageRequest, MediaResolver, boolean)}.
  *
  * <p><b>Tool turns (HITL).</b> An assistant message's tool parts are reconstructed into an
  * {@link AssistantMessage} carrying {@link AssistantMessage.ToolCall}s, followed by a
@@ -39,13 +46,25 @@ public final class UiMessageRequestAdapter {
     private UiMessageRequestAdapter() {
     }
 
-    /** Converts using the {@linkplain MediaResolver#DEFAULT default URL-based} media resolver. */
+    /** Converts using the {@linkplain MediaResolver#DEFAULT default URL-based} media resolver; system messages are dropped. */
     public static List<Message> toSpringAiMessages(UiMessageRequest request) {
         return toSpringAiMessages(request, MediaResolver.DEFAULT);
     }
 
-    /** Converts using the supplied {@code mediaResolver} for inbound {@code file} parts. */
+    /** Converts using the supplied {@code mediaResolver} for inbound {@code file} parts; system messages are dropped. */
     public static List<Message> toSpringAiMessages(UiMessageRequest request, MediaResolver mediaResolver) {
+        return toSpringAiMessages(request, mediaResolver, false);
+    }
+
+    /**
+     * Converts, optionally honouring inbound {@code role:"system"} messages.
+     *
+     * @param allowSystemMessages {@code true} maps {@code role:"system"} to a {@link SystemMessage};
+     *                            {@code false} (the safe default) drops it — a client-supplied system
+     *                            message is a prompt-injection vector, see the class docs
+     */
+    public static List<Message> toSpringAiMessages(UiMessageRequest request, MediaResolver mediaResolver,
+                                                   boolean allowSystemMessages) {
         Objects.requireNonNull(mediaResolver, "mediaResolver");
         List<Message> messages = new ArrayList<>();
         if (request == null || request.messages() == null) {
@@ -54,7 +73,11 @@ public final class UiMessageRequestAdapter {
         for (UiMessageRequest.Message uiMessage : request.messages()) {
             switch (normalizedRole(uiMessage)) {
                 case "assistant" -> appendAssistant(messages, uiMessage);
-                case "system" -> messages.add(new SystemMessage(concatenateText(uiMessage)));
+                case "system" -> {
+                    if (allowSystemMessages) {
+                        messages.add(new SystemMessage(concatenateText(uiMessage)));
+                    }
+                }
                 default -> messages.add(toUserMessage(concatenateText(uiMessage), uiMessage, mediaResolver));
             }
         }

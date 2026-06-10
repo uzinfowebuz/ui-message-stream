@@ -28,7 +28,12 @@ Spring AI backend to a `useChat` frontend.
   `preliminary`, `filename`, `transient`, `reason` (on `abort`), `finishReason`/`messageMetadata` are
   emitted when set and omitted when not.
   Tool parts default to `dynamic:true` (rendered via the client's generic `dynamic-tool` path).
-  Validated against `ai@6.0.197`; pin `ai@^6.0.0` (covers all `6.0.x`).
+  Validated against `ai@6.0.197`; pin `ai@^6.0.0` (covers all `6.0.x`). The v7-only chunks
+  (`tool-approval-response`, `reasoning-file`, `custom`) are intentionally not modelled — the v6
+  client validates with strict schemas and rejects unknown chunk types.
+- **Forward compatibility** — `UiMessagePart.RawPart(type, body)` emits a chunk type the sealed union
+  does not model (it still cannot bypass the writer's text-block lifecycle). Only emit raw types the
+  connected client accepts.
 
 ## The two invariants this library enforces
 
@@ -200,6 +205,27 @@ On approval the tool runs and emits `tool-output-available`; on denial it emits 
 the model is told so it can respond. **Scope:** the library owns the wire parts, the inbound parsing and
 the gate; cross-request continuity follows the *stateless-replay* model (`useChat` resends the full
 history, keyed by a stable `toolCallId`) — it does not persist server-side sessions.
+
+> ⚠️ **Trust model.** Stateless replay means the *client* supplies the approval decisions and the prior
+> tool turns. A hostile client can claim `approved: true` for any call, flip an earlier denial, or
+> fabricate whole tool calls with invented outputs that the adapter will replay to the model as fact.
+> If a gated tool protects anything that matters, verify server-side: persist the pending
+> `approvalId`/`toolCallId` pairs (or sign them, e.g. HMAC over `toolCallId + toolName + input`) and
+> check inbound decisions and replayed tool turns against your own record before executing.
+
+## Security defaults
+
+- **Error masking.** Failures stream as `{"type":"error","errorText":"An error occurred."}` —
+  exception messages are never sent to the client by default (they leak paths, hosts, SQL, provider
+  error bodies). Opt in per transport/manager with `ErrorMessageResolver.MESSAGE` (or your own
+  resolver), or set `uimessagestream.errors.include-message=true` for the starter-wired tool manager.
+- **Inbound `system` messages are dropped.** `useChat` never sends `role:"system"`; honouring one from
+  the request body would let any client override your server-side system prompt. Opt in (only if you
+  knowingly round-trip your own system message) via
+  `UiMessageRequestAdapter.toSpringAiMessages(request, resolver, true)`.
+- **`file` URLs are scheme-restricted.** `MediaResolver.DEFAULT` accepts only absolute `http(s)` URLs —
+  `file:`, `data:` and friends are rejected. A custom resolver that fetches bytes must also guard
+  against SSRF (block private/link-local ranges, cap response size).
 
 ## Build
 

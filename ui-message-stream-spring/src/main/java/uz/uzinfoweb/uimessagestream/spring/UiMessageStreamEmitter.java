@@ -42,14 +42,25 @@ import java.util.function.Consumer;
 public final class UiMessageStreamEmitter {
 
     private final PartSerializer serializer;
+    private final ErrorMessageResolver errorMessages;
 
-    /** Uses a default {@link PartSerializer}. */
+    /** Uses a default {@link PartSerializer} and the masking {@link ErrorMessageResolver#MASKED}. */
     public UiMessageStreamEmitter() {
         this(new PartSerializer());
     }
 
+    /** Uses the masking {@link ErrorMessageResolver#MASKED} — failures stream as a generic message. */
     public UiMessageStreamEmitter(PartSerializer serializer) {
+        this(serializer, ErrorMessageResolver.MASKED);
+    }
+
+    /**
+     * @param errorMessages maps a failure to the {@code errorText} streamed to the client; the
+     *                      default {@link ErrorMessageResolver#MASKED} never discloses internals
+     */
+    public UiMessageStreamEmitter(PartSerializer serializer, ErrorMessageResolver errorMessages) {
         this.serializer = Objects.requireNonNull(serializer, "serializer");
+        this.errorMessages = Objects.requireNonNull(errorMessages, "errorMessages");
     }
 
     /** Bridges a Spring AI response stream onto {@code emitter} using {@link ChatClientResponseMapper#DEFAULT}. */
@@ -218,7 +229,7 @@ public final class UiMessageStreamEmitter {
 
     private void safelyEmitError(SerializedPartSink sink, RuntimeException cause) {
         try {
-            sink.run(w -> w.error(messageOf(cause)));
+            sink.run(w -> w.error(errorMessages.resolve(cause)));
         } catch (EmitterSendException ignored) {
             // Could not deliver the error frame (client gone) — nothing else to do.
         }
@@ -234,11 +245,6 @@ public final class UiMessageStreamEmitter {
 
     private static String newMessageId() {
         return "msg_" + UUID.randomUUID().toString().replace("-", "");
-    }
-
-    private static String messageOf(Throwable error) {
-        String message = error.getMessage();
-        return message != null ? message : error.getClass().getSimpleName();
     }
 
     /** Signals that an {@link SseEmitter#send} failed (client disconnect or an already-closed emitter). */

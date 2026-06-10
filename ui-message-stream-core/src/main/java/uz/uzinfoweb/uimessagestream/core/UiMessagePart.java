@@ -1,5 +1,6 @@
 package uz.uzinfoweb.uimessagestream.core;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -34,7 +35,8 @@ public sealed interface UiMessagePart
                 UiMessagePart.ToolApprovalRequest, UiMessagePart.ToolOutputDenied,
                 UiMessagePart.SourceUrl, UiMessagePart.SourceDocument, UiMessagePart.FilePart,
                 UiMessagePart.DataPart, UiMessagePart.ErrorPart, UiMessagePart.MessageMetadata,
-                UiMessagePart.FinishStep, UiMessagePart.Finish, UiMessagePart.Abort {
+                UiMessagePart.FinishStep, UiMessagePart.Finish, UiMessagePart.Abort,
+                UiMessagePart.RawPart {
 
     /** The wire {@code "type"} value of this part (e.g. {@code "text-delta"}, {@code "data-foo"}). */
     String type();
@@ -57,8 +59,19 @@ public sealed interface UiMessagePart
         return map;
     }
 
-    /** True for the six text/reasoning lifecycle parts, whose ordering is owned by the writer. */
+    /**
+     * True for the six text/reasoning lifecycle parts, whose ordering is owned by the writer. A
+     * {@link RawPart} carrying one of those wire types counts too, so the escape hatch cannot be used
+     * to bypass the writer's block lifecycle.
+     */
     static boolean isTextLifecycle(UiMessagePart part) {
+        if (part instanceof RawPart raw) {
+            return switch (raw.type()) {
+                case "text-start", "text-delta", "text-end",
+                     "reasoning-start", "reasoning-delta", "reasoning-end" -> true;
+                default -> false;
+            };
+        }
         return part instanceof TextStart || part instanceof TextDelta || part instanceof TextEnd
                 || part instanceof ReasoningStart || part instanceof ReasoningDelta
                 || part instanceof ReasoningEnd;
@@ -330,5 +343,39 @@ public sealed interface UiMessagePart
         public Abort() { this(null); }
         public String type() { return "abort"; }
         public Map<String, Object> body() { return fields("reason", reason); }
+    }
+
+    // --- Forward-compatibility escape hatch ---------------------------------------------------
+
+    /**
+     * An arbitrary chunk with an explicit wire {@code type} and field map — the forward-compatibility
+     * valve for chunk types the protocol adds faster than this library models them (e.g. the v7-only
+     * {@code tool-approval-response} / {@code reasoning-file} / {@code custom} chunks). The body is
+     * copied in iteration order with {@code null} values dropped, matching every other part.
+     *
+     * <p><b>Caution:</b> the v6 client validates chunks with strict schemas, so a v6 {@code useChat}
+     * client rejects unknown chunk types — only emit raw types the connected client actually accepts.
+     *
+     * <p>A raw part whose {@code type} is one of the six text/reasoning lifecycle types is still
+     * rejected by {@link UiMessageStreamWriter#part}, so the escape hatch cannot corrupt the
+     * writer-owned block lifecycle.
+     */
+    record RawPart(String type, Map<String, Object> rawBody) implements UiMessagePart {
+        public RawPart {
+            Objects.requireNonNull(type, "raw part type");
+            if (type.isBlank()) {
+                throw new IllegalArgumentException("raw part type must not be blank");
+            }
+            LinkedHashMap<String, Object> copy = new LinkedHashMap<>();
+            if (rawBody != null) {
+                rawBody.forEach((key, value) -> {
+                    if (value != null) {
+                        copy.put(key, value);
+                    }
+                });
+            }
+            rawBody = Collections.unmodifiableMap(copy);
+        }
+        public Map<String, Object> body() { return rawBody; }
     }
 }

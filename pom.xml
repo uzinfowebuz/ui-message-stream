@@ -36,7 +36,7 @@
       (uz.uzinfoweb, verified via DNS TXT on uzinfoweb.uz) to be owned; fall back to io.github.<user>
       if the domain cannot be verified.
     -->
-    <url>https://github.com/uzinfoweb/ui-message-stream</url>
+    <url>https://github.com/uzinfowebuz/ui-message-stream</url>
 
     <organization>
         <name>Uzinfoweb</name>
@@ -60,9 +60,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/uzinfoweb/ui-message-stream.git</connection>
-        <developerConnection>scm:git:git@github.com:uzinfoweb/ui-message-stream.git</developerConnection>
-        <url>https://github.com/uzinfoweb/ui-message-stream</url>
+        <connection>scm:git:https://github.com/uzinfowebuz/ui-message-stream.git</connection>
+        <developerConnection>scm:git:git@github.com:uzinfowebuz/ui-message-stream.git</developerConnection>
+        <url>https://github.com/uzinfowebuz/ui-message-stream</url>
         <tag>HEAD</tag>
     </scm>
 

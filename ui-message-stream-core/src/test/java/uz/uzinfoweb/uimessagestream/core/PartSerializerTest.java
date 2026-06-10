@@ -139,6 +139,21 @@ class PartSerializerTest {
     }
 
     @Test
+    @DisplayName("RawPart serializes its explicit type and body in order, dropping null values")
+    void rawPartSerializes() {
+        java.util.LinkedHashMap<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("id", "x1");
+        body.put("absent", null);
+        body.put("data", Map.of("k", "v"));
+
+        assertThat(serializer.serialize(new UiMessagePart.RawPart("future-chunk", body)))
+                .isEqualTo("{\"type\":\"future-chunk\",\"id\":\"x1\",\"data\":{\"k\":\"v\"}}");
+
+        assertThat(serializer.serialize(new UiMessagePart.RawPart("fieldless", null)))
+                .isEqualTo("{\"type\":\"fieldless\"}");
+    }
+
+    @Test
     @DisplayName("abort carries an optional reason when set, and is fieldless otherwise")
     void abortReason() {
         assertThat(serializer.serialize(new UiMessagePart.Abort())).isEqualTo("{\"type\":\"abort\"}");
@@ -157,5 +172,7 @@ class PartSerializerTest {
                 .isThrownBy(() -> new UiMessagePart.ToolOutputError("call-1", null));
         assertThatNullPointerException()
                 .isThrownBy(() -> new UiMessagePart.ToolInputError("call-1", "getWeather", Map.of(), null));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new UiMessagePart.RawPart(null, Map.of()));
     }
 }

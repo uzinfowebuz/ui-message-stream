@@ -9,6 +9,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.http.codec.ServerSentEvent;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
+import uz.uzinfoweb.uimessagestream.core.PartSerializer;
 
 import java.time.Duration;
 import java.util.List;
@@ -82,10 +83,10 @@ class UiMessageStreamTest {
     }
 
     @Test
-    @DisplayName("an upstream error becomes an error part, then the stream still ends with [DONE]")
+    @DisplayName("an upstream error becomes a masked error part (no internals), then the stream still ends with [DONE]")
     void upstreamErrorBecomesErrorPart() {
         Flux<ChatClientResponse> upstream =
-                Flux.concat(Flux.just(chunk("hi")), Flux.error(new RuntimeException("boom")));
+                Flux.concat(Flux.just(chunk("hi")), Flux.error(new RuntimeException("jdbc://user:secret@db")));
 
         StepVerifier.create(stream.from(upstream).map(UiMessageStreamTest::data))
                 .expectNextMatches(s -> s.contains("\"type\":\"start\""))
@@ -93,6 +94,20 @@ class UiMessageStreamTest {
                 .expectNextMatches(s -> s.startsWith("{\"type\":\"text-start\""))
                 .expectNextMatches(s -> s.endsWith("\"delta\":\"hi\"}"))
                 .expectNextMatches(s -> s.startsWith("{\"type\":\"text-end\""))
+                .expectNext("{\"type\":\"error\",\"errorText\":\"An error occurred.\"}")
+                .expectNext("[DONE]")
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("ErrorMessageResolver.MESSAGE opts back into raw exception-message disclosure")
+    void errorMessageDisclosureIsOptIn() {
+        UiMessageStream disclosing = new UiMessageStream(new PartSerializer(), ErrorMessageResolver.MESSAGE);
+        Flux<ChatClientResponse> upstream = Flux.error(new RuntimeException("boom"));
+
+        StepVerifier.create(disclosing.from(upstream).map(UiMessageStreamTest::data))
+                .expectNextMatches(s -> s.contains("\"type\":\"start\""))
+                .expectNext("{\"type\":\"start-step\"}")
                 .expectNext("{\"type\":\"error\",\"errorText\":\"boom\"}")
                 .expectNext("[DONE]")
                 .verifyComplete();
