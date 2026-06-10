@@ -7,8 +7,9 @@
     <!--
       We inherit from spring-boot-starter-parent purely to reuse its curated dependency
       management (spring-web, reactor, jackson, junit, assertj, spring-test, ...). The
-      published artifacts are plain libraries; no module declares the spring-boot-maven-plugin,
-      so nothing is ever repackaged into a fat jar.
+      published artifacts are plain libraries; no published module declares the
+      spring-boot-maven-plugin, so nothing released is ever repackaged into a fat jar.
+      (The demo module declares it to be runnable, but is never deployed.)
     -->
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -70,6 +71,7 @@
         <module>ui-message-stream-core</module>
         <module>ui-message-stream-spring</module>
         <module>ui-message-stream-spring-boot-starter</module>
+        <module>ui-message-stream-demo</module>
     </modules>
 
     <properties>

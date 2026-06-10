@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: ui-message-stream-demo
+  threads:
+    virtual:
+      # The servlet transport (SseEmitter) blocks one thread per stream; virtual threads make that
+      # free. Boot's applicationTaskExecutor becomes virtual and the demo injects it as the
+      # chat executor.
+      enabled: true
+
+uimessagestream:
+  tool-io:
+    # Wrap the ToolCallingManager bean with RecordingToolCallingManager: tool input/output and the
+    # human-in-the-loop approval gate stream natively as tool-* frames.
+    native: true
+    # Tag tool parts "dynamic":true so a useChat client renders them via its generic dynamic-tool
+    # path without declaring per-tool types.
+    dynamic: true
+  errors:
+    # Default (false): exception messages are masked ("An error occurred.") in error /
+    # tool-output-error frames. Set true to stream raw exception messages — try it with the
+    # "please fail" prompt to see the difference.
+    include-message: false

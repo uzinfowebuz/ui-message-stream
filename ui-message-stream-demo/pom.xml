@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>uz.uzinfoweb</groupId>
+        <artifactId>ui-message-stream-parent</artifactId>
+        <version>0.2.0</version>
+    </parent>
+
+    <artifactId>ui-message-stream-demo</artifactId>
+    <name>UI Message Stream :: Demo</name>
+    <description>
+        Runnable Spring Boot showcase of every library feature: streaming text, native tool I/O,
+        the ChatClient advisor, human-in-the-loop approval, custom data-* parts pushed from tools,
+        masked errors, and both the reactive and servlet transports. Uses a scripted offline
+        ChatModel, so it runs with zero API keys. Never published.
+    </description>
+
+    <properties>
+        <!-- Sample app: built in the reactor for convenience, never deployed/released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <gpg.skip>true</gpg.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+    </properties>
+
+    <dependencies>
+        <!-- The library under demonstration (brings core + spring transitively). -->
+        <dependency>
+            <groupId>uz.uzinfoweb</groupId>
+            <artifactId>ui-message-stream-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Servlet web stack: hosts BOTH transports — Spring MVC supports reactive
+             (Flux<ServerSentEvent>) return values, and SseEmitter is MVC-native. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring AI: ChatClient + the tool-calling machinery. The library declares these
+             "provided"; the host app (this demo) supplies them for real. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Makes the demo runnable: ./mvnw -pl ui-message-stream-demo -am spring-boot:run -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

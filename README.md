@@ -51,10 +51,25 @@ Spring AI backend to a `useChat` frontend.
 | Module | Depends on | Purpose |
 |--------|------------|---------|
 | `ui-message-stream-core` | **Jackson only** | `UiMessagePart` (sealed records), `PartSerializer`, the stateful `UiMessageStreamWriter`. No Spring / Reactor / Spring AI — by design. |
-| `ui-message-stream-spring` | core + spring-web + spring-webmvc + reactor + spring-ai *(all `provided`)* | Reactive `UiMessageStream` **and** servlet `UiMessageStreamEmitter` transports; `ResponseMapper` / `ChatClientResponseMapper.DEFAULT` + `.TEXT_ONLY`; `UiMessageStreamResponse` / `UiMessageStreamHttp`; the thread-safe per-request `SerializedPartSink`; opt-in native tool I/O (`RecordingToolCallingManager`); inbound `UiMessageRequest` + adapter + pluggable `MediaResolver`. |
+| `ui-message-stream-spring` | core + spring-web + spring-webmvc + reactor + spring-ai *(all `provided`)* | Reactive `UiMessageStream` **and** servlet `UiMessageStreamEmitter` transports; `ResponseMapper` / `ChatClientResponseMapper.DEFAULT` + `.TEXT_ONLY`; `UiMessageStreamResponse` / `UiMessageStreamHttp`; the thread-safe per-request `SerializedPartSink` + `UiMessageStreamAdvisor` (sink injection via the `ChatClient` advisor chain); opt-in native tool I/O (`RecordingToolCallingManager`); inbound `UiMessageRequest` + adapter + pluggable `MediaResolver`. |
 | `ui-message-stream-spring-boot-starter` | core + spring | `@AutoConfiguration` exposing the default `ResponseMapper` (`@ConditionalOnMissingBean`). |
+| `ui-message-stream-demo` *(not published)* | starter | Runnable showcase app — see below. |
 
 Built against Spring Boot 4.0.6 (Spring Framework 7) and Spring AI 2.0.0-M8, Java 25.
+
+## Try it: the demo app
+
+A runnable showcase with a **scripted offline model — no API key needed** — and a bundled
+mini-`useChat` web page that renders the chat on the left and the raw SSE frames on the right:
+
+```bash
+./mvnw -pl ui-message-stream-demo -am spring-boot:run   # then open http://localhost:8080
+```
+
+It exercises everything: streamed text deltas, native tool I/O, a custom `data-*` part pushed from
+inside a tool, the clickable human-in-the-loop approval flow, masked tool errors, both transports
+(reactive + servlet), and an imperative "protocol tour". See
+[`ui-message-stream-demo/README.md`](ui-message-stream-demo/README.md) for the feature map.
 
 ## Install
 
@@ -146,13 +161,14 @@ uimessagestream.tool-io.native=true
 
 Then create a per-request `SerializedPartSink`, publish it in the tool context, and pass the same
 sink to the transport. A `RecordingToolCallingManager` emits `tool-input-available` +
-`tool-output-available` (paired by `toolCallId`) onto that sink, serialized with the model's text:
+`tool-output-available` (paired by `toolCallId`) onto that sink, serialized with the model's text.
+The idiomatic way to publish the sink is the `UiMessageStreamAdvisor` (a Spring AI `StreamAdvisor`):
 
 ```java
 SerializedPartSink sink = new SerializedPartSink();
 var upstream = chatClient.prompt()
         .messages(messages)
-        .toolContext(Map.of(RecordingToolCallingManager.SINK_KEY, sink))
+        .advisors(new UiMessageStreamAdvisor(sink))   // injects the sink into the tool context
         .stream().chatClientResponse();
 
 // reactive
@@ -194,9 +210,8 @@ var messages  = UiMessageRequestAdapter.toSpringAiMessages(body);     // replays
 SerializedPartSink sink = new SerializedPartSink();
 var upstream = chatClient.prompt()
         .messages(messages)
-        .toolContext(Map.of(
-                RecordingToolCallingManager.SINK_KEY, sink,
-                RecordingToolCallingManager.APPROVALS_KEY, decisions))
+        .advisors(new UiMessageStreamAdvisor(sink))
+        .tools(t -> t.context(RecordingToolCallingManager.APPROVALS_KEY, decisions))
         .stream().chatClientResponse();
 UiMessageStreamResponse.of(new UiMessageStream().from(upstream, ChatClientResponseMapper.TEXT_ONLY, sink));
 ```
