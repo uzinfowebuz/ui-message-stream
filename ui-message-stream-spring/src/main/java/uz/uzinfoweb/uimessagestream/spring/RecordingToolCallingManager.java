@@ -80,6 +80,7 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
     private final ObjectMapper jsonParser;
     private final boolean dynamic;
     private final ApprovalPolicy approvalPolicy;
+    private final ErrorMessageResolver errorMessages;
 
     /** Decorates {@code delegate} with an internal {@link ObjectMapper}; tool parts are tagged {@code dynamic:true}; no approval gate. */
     public RecordingToolCallingManager(ToolCallingManager delegate) {
@@ -105,10 +106,21 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
      */
     public RecordingToolCallingManager(ToolCallingManager delegate, ObjectMapper jsonParser, boolean dynamic,
                                        ApprovalPolicy approvalPolicy) {
+        this(delegate, jsonParser, dynamic, approvalPolicy, ErrorMessageResolver.MASKED);
+    }
+
+    /**
+     * @param errorMessages maps a thrown tool failure to the {@code errorText} streamed in
+     *                      {@code tool-output-error}; the default {@link ErrorMessageResolver#MASKED}
+     *                      never discloses exception internals to the client
+     */
+    public RecordingToolCallingManager(ToolCallingManager delegate, ObjectMapper jsonParser, boolean dynamic,
+                                       ApprovalPolicy approvalPolicy, ErrorMessageResolver errorMessages) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.jsonParser = Objects.requireNonNull(jsonParser, "jsonParser");
         this.dynamic = dynamic;
         this.approvalPolicy = Objects.requireNonNull(approvalPolicy, "approvalPolicy");
+        this.errorMessages = Objects.requireNonNull(errorMessages, "errorMessages");
     }
 
     @Override
@@ -181,7 +193,7 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
         } catch (RuntimeException e) {
             // A tool threw (the app opted into a throwing ToolExecutionExceptionProcessor): surface a
             // per-call tool-output-error for each in-flight call before the failure propagates upstream.
-            String errorText = messageOf(e);
+            String errorText = errorMessages.resolve(e);
             for (String id : callIds) {
                 sink.toolOutputError(id, errorText, dynamic);
             }
@@ -280,10 +292,5 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
 
     private static String newApprovalId() {
         return "appr_" + UUID.randomUUID().toString().replace("-", "");
-    }
-
-    private static String messageOf(Throwable error) {
-        String message = error.getMessage();
-        return message != null ? message : error.getClass().getSimpleName();
     }
 }

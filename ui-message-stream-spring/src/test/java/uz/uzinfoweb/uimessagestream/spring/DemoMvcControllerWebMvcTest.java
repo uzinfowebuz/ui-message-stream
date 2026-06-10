@@ -91,14 +91,15 @@ class DemoMvcControllerWebMvcTest {
     }
 
     @Test
-    @DisplayName("upstream error becomes an error part, then the stream still ends with [DONE]")
+    @DisplayName("upstream error becomes a masked error part (no internals), then the stream still ends with [DONE]")
     void errorCase() throws Exception {
         String body = streamBody("/demo-mvc/error");
 
         assertThat(body)
                 .contains("\"delta\":\"hi\"")
                 .contains("\"type\":\"error\"")
-                .contains("boom")
+                .contains("An error occurred.")
+                .doesNotContain("boom")
                 .contains("[DONE]");
 
         assertThat(body.indexOf("\"type\":\"error\"")).isLessThan(body.indexOf("[DONE]"));

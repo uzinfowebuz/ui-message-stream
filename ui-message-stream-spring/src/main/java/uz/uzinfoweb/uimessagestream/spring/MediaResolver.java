@@ -27,8 +27,15 @@ public interface MediaResolver {
 
     /**
      * Default resolver: references the {@code url} as a {@link URI} (no bytes are fetched) carrying the
-     * parsed {@code mediaType}. Returns empty when the url is blank, or the mediaType is missing or not
-     * a valid MIME type. Suitable when the model/provider can fetch the URL itself (e.g. a public URL).
+     * parsed {@code mediaType}. Returns empty when the url is blank, not an absolute {@code http}/
+     * {@code https} URL, or the mediaType is missing or not a valid MIME type. Suitable when the
+     * model/provider can fetch the URL itself (e.g. a public URL).
+     *
+     * <p><b>Security.</b> The url is client-controlled, so only {@code http} and {@code https} are
+     * accepted — {@code file:}, {@code data:} and other schemes are rejected to keep the inbound
+     * {@code file} part from referencing local or oversized in-line resources. A custom resolver that
+     * actually <em>fetches</em> bytes must additionally guard against SSRF (validate the host/IP, block
+     * link-local and private ranges, cap the response size).
      */
     MediaResolver DEFAULT = (url, mediaType) -> {
         if (url == null || url.isBlank() || mediaType == null || mediaType.isBlank()) {
@@ -44,6 +51,10 @@ public interface MediaResolver {
         try {
             uri = URI.create(url.trim());
         } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+        String scheme = uri.getScheme();
+        if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
             return Optional.empty();
         }
         return Optional.of(Media.builder().mimeType(mimeType).data(uri).build());

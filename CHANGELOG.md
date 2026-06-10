@@ -4,6 +4,38 @@ All notable changes to **ui-message-stream** are documented here. The format is 
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Security-hardening release: safer defaults for error disclosure, inbound system messages and inbound
+file URLs, plus a forward-compatibility escape hatch for future chunk types.
+
+### Added
+
+- **`ErrorMessageResolver`** (spring): maps a server-side failure to the `errorText` streamed to the
+  client. `MASKED` (the new default everywhere) sends a generic `"An error occurred."`; `MESSAGE`
+  restores raw `getMessage()` disclosure. Accepted by `UiMessageStream`, `UiMessageStreamEmitter` and
+  `RecordingToolCallingManager` constructors, honoured as a bean by the starter, and toggleable for
+  the starter-wired tool manager via `uimessagestream.errors.include-message` (default `false`).
+- **`UiMessagePart.RawPart(type, body)`** (core): emits an arbitrary chunk type the sealed union does
+  not model — the forward-compatibility valve for protocol additions (e.g. the v7-only
+  `tool-approval-response` / `reasoning-file` / `custom`). It cannot bypass the writer's text-block
+  lifecycle: raw text/reasoning lifecycle types are rejected by `UiMessageStreamWriter.part`.
+- `UiMessageRequestAdapter.toSpringAiMessages(request, mediaResolver, allowSystemMessages)` overload.
+
+### Changed (security)
+
+- **Error frames no longer carry raw exception messages.** Both transports and the recording tool
+  manager previously streamed `throwable.getMessage()` to the browser (leaking paths, hosts, SQL,
+  provider error bodies); they now default to `ErrorMessageResolver.MASKED`, matching the AI SDK's own
+  mask-by-default behaviour. Disclosure is opt-in.
+- **Inbound `role:"system"` messages are dropped by default** by `UiMessageRequestAdapter`. `useChat`
+  never sends a system role; honouring one from the (attacker-controllable) request body let any
+  client inject or override the server's system prompt. Opt back in with the new
+  `allowSystemMessages` overload.
+- **`MediaResolver.DEFAULT` only accepts absolute `http`/`https` URLs.** Inbound `file` parts are
+  client-controlled; `file:`, `data:` and other schemes are now rejected (SSRF / local-resource
+  guard). Custom byte-fetching resolvers must additionally validate hosts and cap response sizes.
+
 ## [0.2.0] - 2026-06-06
 
 Completes the AI SDK **v6** wire surface (validated against `ai@6.0.197`) and adds the human-in-the-loop
@@ -88,5 +120,6 @@ Java 25.
 - **OSS readiness**: Apache-2.0 `LICENSE` + `NOTICE`, complete POM metadata, and a `release` profile
   (sources + javadoc jars, GPG signing, `central-publishing-maven-plugin`) for Maven Central.
 
-[0.2.0]: https://github.com/uzinfoweb/ui-message-stream/releases/tag/v0.2.0
-[0.1.0]: https://github.com/uzinfoweb/ui-message-stream/releases/tag/v0.1.0
+[Unreleased]: https://github.com/uzinfowebuz/ui-message-stream/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/v0.2.0
+[0.1.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/v0.1.0

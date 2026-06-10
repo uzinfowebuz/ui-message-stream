@@ -10,6 +10,7 @@ import uz.uzinfoweb.uimessagestream.core.PartSerializer;
 import uz.uzinfoweb.uimessagestream.core.UiMessagePart;
 import uz.uzinfoweb.uimessagestream.core.UiMessageStreamWriter;
 
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -25,14 +26,25 @@ import java.util.function.Consumer;
 public final class UiMessageStream {
 
     private final PartSerializer serializer;
+    private final ErrorMessageResolver errorMessages;
 
-    /** Uses a default {@link PartSerializer}. */
+    /** Uses a default {@link PartSerializer} and the masking {@link ErrorMessageResolver#MASKED}. */
     public UiMessageStream() {
         this(new PartSerializer());
     }
 
+    /** Uses the masking {@link ErrorMessageResolver#MASKED} — failures stream as a generic message. */
     public UiMessageStream(PartSerializer serializer) {
-        this.serializer = serializer;
+        this(serializer, ErrorMessageResolver.MASKED);
+    }
+
+    /**
+     * @param errorMessages maps a failure to the {@code errorText} streamed to the client; the
+     *                      default {@link ErrorMessageResolver#MASKED} never discloses internals
+     */
+    public UiMessageStream(PartSerializer serializer, ErrorMessageResolver errorMessages) {
+        this.serializer = Objects.requireNonNull(serializer, "serializer");
+        this.errorMessages = Objects.requireNonNull(errorMessages, "errorMessages");
     }
 
     /** Bridges a Spring AI response stream using {@link ChatClientResponseMapper#DEFAULT}. */
@@ -68,12 +80,12 @@ public final class UiMessageStream {
                         try {
                             partSink.run(w -> mapper.accept(response, w));
                         } catch (RuntimeException e) {
-                            partSink.run(w -> w.error(messageOf(e)));
+                            partSink.run(w -> w.error(errorMessages.resolve(e)));
                             sink.complete();
                         }
                     },
                     error -> {
-                        partSink.run(w -> w.error(messageOf(error)));
+                        partSink.run(w -> w.error(errorMessages.resolve(error)));
                         sink.complete();
                     },
                     () -> {
@@ -101,7 +113,7 @@ public final class UiMessageStream {
                 producer.accept(writer);
                 writer.finish();
             } catch (RuntimeException e) {
-                writer.error(messageOf(e));
+                writer.error(errorMessages.resolve(e));
             }
             sink.complete();
         }, FluxSink.OverflowStrategy.BUFFER);
@@ -120,10 +132,5 @@ public final class UiMessageStream {
 
     private static String newMessageId() {
         return "msg_" + UUID.randomUUID().toString().replace("-", "");
-    }
-
-    private static String messageOf(Throwable error) {
-        String message = error.getMessage();
-        return message != null ? message : error.getClass().getSimpleName();
     }
 }

@@ -109,24 +109,14 @@ class RecordingToolCallingManagerTest {
     }
 
     @Test
-    @DisplayName("a thrown tool surfaces tool-output-error for the in-flight call, then rethrows")
+    @DisplayName("a thrown tool surfaces a masked tool-output-error for the in-flight call, then rethrows")
     void throwingToolEmitsOutputError() {
         List<UiMessagePart> parts = new ArrayList<>();
         SerializedPartSink sink = new SerializedPartSink();
         sink.bind(new UiMessageStreamWriter(parts::add));
 
         ChatResponse chatResponse = chatResponseWithToolCall("call_1", "boomTool", "{}");
-        ToolCallingManager delegate = new ToolCallingManager() {
-            @Override
-            public List<ToolDefinition> resolveToolDefinitions(ToolCallingChatOptions chatOptions) {
-                return List.of();
-            }
-
-            @Override
-            public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
-                throw new IllegalStateException("kaboom");
-            }
-        };
+        ToolCallingManager delegate = throwingDelegate("kaboom");
 
         assertThatThrownBy(() ->
                 new RecordingToolCallingManager(delegate).executeToolCalls(promptWithSink(sink), chatResponse))
@@ -136,8 +126,42 @@ class RecordingToolCallingManagerTest {
         assertThat(errIdx).as("tool-output-error emitted").isGreaterThanOrEqualTo(0);
         UiMessagePart.ToolOutputError err = (UiMessagePart.ToolOutputError) parts.get(errIdx);
         assertThat(err.toolCallId()).isEqualTo("call_1");
-        assertThat(err.errorText()).isEqualTo("kaboom");
+        assertThat(err.errorText()).isEqualTo("An error occurred."); // masked by default
         assertThat(err.dynamic()).isTrue();
+    }
+
+    @Test
+    @DisplayName("ErrorMessageResolver.MESSAGE opts the tool-output-error back into raw message disclosure")
+    void throwingToolDisclosesMessageWhenOptedIn() {
+        List<UiMessagePart> parts = new ArrayList<>();
+        SerializedPartSink sink = new SerializedPartSink();
+        sink.bind(new UiMessageStreamWriter(parts::add));
+
+        RecordingToolCallingManager manager = new RecordingToolCallingManager(
+                throwingDelegate("kaboom"), new ObjectMapper(), true, ApprovalPolicy.NONE,
+                ErrorMessageResolver.MESSAGE);
+
+        assertThatThrownBy(() -> manager.executeToolCalls(
+                promptWithSink(sink), chatResponseWithToolCall("call_1", "boomTool", "{}")))
+                .isInstanceOf(IllegalStateException.class);
+
+        UiMessagePart.ToolOutputError err =
+                (UiMessagePart.ToolOutputError) parts.get(indexOfType(parts, "tool-output-error"));
+        assertThat(err.errorText()).isEqualTo("kaboom");
+    }
+
+    private static ToolCallingManager throwingDelegate(String message) {
+        return new ToolCallingManager() {
+            @Override
+            public List<ToolDefinition> resolveToolDefinitions(ToolCallingChatOptions chatOptions) {
+                return List.of();
+            }
+
+            @Override
+            public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
+                throw new IllegalStateException(message);
+            }
+        };
     }
 
     @Test

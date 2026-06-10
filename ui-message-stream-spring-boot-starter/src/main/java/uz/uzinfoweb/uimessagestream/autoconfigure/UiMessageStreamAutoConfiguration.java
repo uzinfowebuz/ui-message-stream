@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import uz.uzinfoweb.uimessagestream.spring.ApprovalPolicy;
 import uz.uzinfoweb.uimessagestream.spring.ChatClientResponseMapper;
+import uz.uzinfoweb.uimessagestream.spring.ErrorMessageResolver;
 import uz.uzinfoweb.uimessagestream.spring.RecordingToolCallingManager;
 import uz.uzinfoweb.uimessagestream.spring.ResponseMapper;
 
@@ -30,6 +31,11 @@ import uz.uzinfoweb.uimessagestream.spring.ResponseMapper;
  *       emitted natively into the per-request
  *       {@link uz.uzinfoweb.uimessagestream.spring.SerializedPartSink}.</li>
  * </ul>
+ *
+ * <p>{@code uimessagestream.errors.include-message} (default {@code false}) — when {@code true}, a tool
+ * failure's {@code tool-output-error} carries the raw exception message ({@link
+ * ErrorMessageResolver#MESSAGE}); by default it is masked ({@link ErrorMessageResolver#MASKED}) so no
+ * server internals leak to the client. Declare an {@link ErrorMessageResolver} bean to customize.
  *
  * <p>A default no-op {@link ApprovalPolicy} ({@link ApprovalPolicy#NONE}) is registered
  * ({@code @ConditionalOnMissingBean}) so the approval gate stays opt-in: declare your own
@@ -59,29 +65,39 @@ public class UiMessageStreamAutoConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "uimessagestream.tool-io", name = "native", havingValue = "true")
     static BeanPostProcessor uiMessageStreamRecordingToolCallingManager(
-            Environment environment, ObjectProvider<ApprovalPolicy> approvalPolicy) {
+            Environment environment, ObjectProvider<ApprovalPolicy> approvalPolicy,
+            ObjectProvider<ErrorMessageResolver> errorMessages) {
         // Read from Environment, not @Value: a static BeanPostProcessor is instantiated before the
         // property-placeholder configurer, so a ${...} parameter would arrive unresolved.
         boolean dynamicTools = environment.getProperty("uimessagestream.tool-io.dynamic", Boolean.class, true);
-        return new RecordingToolCallingManagerPostProcessor(dynamicTools, approvalPolicy);
+        boolean includeMessage = environment.getProperty("uimessagestream.errors.include-message", Boolean.class, false);
+        return new RecordingToolCallingManagerPostProcessor(dynamicTools, includeMessage, approvalPolicy, errorMessages);
     }
 
     /** Wraps any {@link ToolCallingManager} bean with a {@link RecordingToolCallingManager} (once). */
     static final class RecordingToolCallingManagerPostProcessor implements BeanPostProcessor {
 
         private final boolean dynamicTools;
+        private final boolean includeErrorMessage;
         private final ObjectProvider<ApprovalPolicy> approvalPolicy;
+        private final ObjectProvider<ErrorMessageResolver> errorMessages;
 
-        RecordingToolCallingManagerPostProcessor(boolean dynamicTools, ObjectProvider<ApprovalPolicy> approvalPolicy) {
+        RecordingToolCallingManagerPostProcessor(boolean dynamicTools, boolean includeErrorMessage,
+                                                 ObjectProvider<ApprovalPolicy> approvalPolicy,
+                                                 ObjectProvider<ErrorMessageResolver> errorMessages) {
             this.dynamicTools = dynamicTools;
+            this.includeErrorMessage = includeErrorMessage;
             this.approvalPolicy = approvalPolicy;
+            this.errorMessages = errorMessages;
         }
 
         @Override
         public Object postProcessAfterInitialization(Object bean, String beanName) {
             if (bean instanceof ToolCallingManager manager && !(bean instanceof RecordingToolCallingManager)) {
                 ApprovalPolicy policy = approvalPolicy.getIfAvailable(() -> ApprovalPolicy.NONE);
-                return new RecordingToolCallingManager(manager, new ObjectMapper(), dynamicTools, policy);
+                ErrorMessageResolver resolver = errorMessages.getIfAvailable(() ->
+                        includeErrorMessage ? ErrorMessageResolver.MESSAGE : ErrorMessageResolver.MASKED);
+                return new RecordingToolCallingManager(manager, new ObjectMapper(), dynamicTools, policy, resolver);
             }
             return bean;
         }

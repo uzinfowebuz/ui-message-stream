@@ -175,6 +175,23 @@ class UiMessageStreamWriterTest {
     }
 
     @Test
+    @DisplayName("a RawPart escape hatch closes the open text block, but cannot smuggle lifecycle types")
+    void rawPartHonoursLifecycle() {
+        UiMessageStreamWriter writer = newWriter();
+        writer.text("hi");
+        writer.part(new UiMessagePart.RawPart("future-chunk", Map.of("x", 1)));
+        writer.finish();
+
+        assertThat(types()).containsExactly(
+                "text-start", "text-delta", "text-end", "future-chunk", "finish-step", "finish");
+
+        assertThatThrownBy(() -> newWriter().part(new UiMessagePart.RawPart("text-delta", Map.of("id", "x"))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newWriter().part(new UiMessagePart.RawPart("reasoning-end", Map.of())))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("finish(reason, metadata) carries the optional fields")
     void finishWithReasonAndMetadata() {
         UiMessageStreamWriter writer = newWriter();

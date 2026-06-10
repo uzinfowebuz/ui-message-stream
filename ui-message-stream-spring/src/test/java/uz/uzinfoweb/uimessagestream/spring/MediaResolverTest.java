@@ -46,4 +46,16 @@ class MediaResolverTest {
     void emptyForBadMediaType() {
         assertThat(MediaResolver.DEFAULT.resolve("https://cdn.example/x", "not a mime type")).isEmpty();
     }
+
+    @Test
+    @DisplayName("rejects non-http(s) schemes — the url is client-controlled (SSRF/local-resource guard)")
+    void rejectsNonHttpSchemes() {
+        assertThat(MediaResolver.DEFAULT.resolve("file:///etc/passwd", "text/plain")).isEmpty();
+        assertThat(MediaResolver.DEFAULT.resolve("data:image/png;base64,AAAA", "image/png")).isEmpty();
+        assertThat(MediaResolver.DEFAULT.resolve("ftp://internal.host/x", "image/png")).isEmpty();
+        assertThat(MediaResolver.DEFAULT.resolve("relative/path.png", "image/png")).isEmpty();
+
+        assertThat(MediaResolver.DEFAULT.resolve("HTTP://cdn.example/x.png", "image/png")).isPresent();
+        assertThat(MediaResolver.DEFAULT.resolve("https://cdn.example/x.png", "image/png")).isPresent();
+    }
 }
