@@ -37,3 +37,6 @@ nul
 
 # Log files
 *.log
+
+# Compiled class files (should never appear outside target/)
+*.class
