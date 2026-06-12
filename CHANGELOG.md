@@ -6,8 +6,11 @@ All notable changes to **ui-message-stream** are documented here. The format is 
 
 ## [Unreleased]
 
-Security-hardening release: safer defaults for error disclosure, inbound system messages and inbound
-file URLs, plus a forward-compatibility escape hatch for future chunk types.
+## [0.3.0] - 2026-06-12
+
+Security-hardening release plus ChatClient ergonomics: safer defaults for error disclosure, inbound
+system messages and inbound file URLs, a forward-compatibility escape hatch for future chunk types,
+advisor-based sink injection, and a runnable zero-key demo.
 
 ### Added
 
@@ -20,6 +23,17 @@ file URLs, plus a forward-compatibility escape hatch for future chunk types.
   not model — the forward-compatibility valve for protocol additions (e.g. the v7-only
   `tool-approval-response` / `reasoning-file` / `custom`). It cannot bypass the writer's text-block
   lifecycle: raw text/reasoning lifecycle types are rejected by `UiMessageStreamWriter.part`.
+- **`UiMessageStreamAdvisor`** (spring): a Spring AI `StreamAdvisor` that injects the per-request
+  `SerializedPartSink` into the `ToolCallingChatOptions` tool context, replacing the manual
+  `.toolContext(Map.of(RecordingToolCallingManager.SINK_KEY, sink))` dance with
+  `.advisors(new UiMessageStreamAdvisor(sink))`. It runs just ahead of memory advisors by default
+  (`DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER - 1`, overridable via the two-arg constructor) and is a
+  no-op pass-through when the request carries no `ToolCallingChatOptions`.
+- **`ui-message-stream-demo`**: a runnable, never-published Spring Boot showcase of every feature —
+  streaming text, native tool I/O, the advisor, human-in-the-loop approval, custom `data-*` parts
+  pushed from a `@Tool` method, masked errors, and both transports — driven by a scripted offline
+  `ChatModel` (zero API keys), with a dependency-free mini-`useChat` page rendering the chat next to
+  the raw SSE frames.
 - `UiMessageRequestAdapter.toSpringAiMessages(request, mediaResolver, allowSystemMessages)` overload.
 
 ### Changed (security)
@@ -120,6 +134,7 @@ Java 25.
 - **OSS readiness**: Apache-2.0 `LICENSE` + `NOTICE`, complete POM metadata, and a `release` profile
   (sources + javadoc jars, GPG signing, `central-publishing-maven-plugin`) for Maven Central.
 
-[Unreleased]: https://github.com/uzinfowebuz/ui-message-stream/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/v0.2.0
-[0.1.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/v0.1.0
+[Unreleased]: https://github.com/uzinfowebuz/ui-message-stream/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.3.0
+[0.2.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.2.0
+[0.1.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.1.0
