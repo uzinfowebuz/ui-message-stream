@@ -7,7 +7,7 @@
     <parent>
         <groupId>uz.uzinfoweb</groupId>
         <artifactId>ui-message-stream-parent</artifactId>
-        <version>0.3.0</version>
+        <version>0.4.0</version>
     </parent>
 
     <artifactId>ui-message-stream-core</artifactId>
@@ -20,7 +20,7 @@
     <dependencies>
         <!-- The one and only runtime dependency. -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
 

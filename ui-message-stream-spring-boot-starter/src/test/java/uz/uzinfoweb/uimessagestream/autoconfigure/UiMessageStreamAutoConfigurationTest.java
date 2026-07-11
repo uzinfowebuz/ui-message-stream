@@ -2,6 +2,7 @@ package uz.uzinfoweb.uimessagestream.autoconfigure;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClientCustomizer;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -18,8 +19,8 @@ import org.springframework.context.annotation.Configuration;
 import uz.uzinfoweb.uimessagestream.core.UiMessagePart;
 import uz.uzinfoweb.uimessagestream.core.UiMessageStreamWriter;
 import uz.uzinfoweb.uimessagestream.spring.ApprovalPolicy;
-import uz.uzinfoweb.uimessagestream.spring.RecordingToolCallingManager;
 import uz.uzinfoweb.uimessagestream.spring.ResponseMapper;
+import uz.uzinfoweb.uimessagestream.spring.UiMessageStreamToolAdvisor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,22 +41,22 @@ class UiMessageStreamAutoConfigurationTest {
     }
 
     @Test
-    @DisplayName("native tool I/O is off by default: the ToolCallingManager is not wrapped")
+    @DisplayName("native tool I/O is off by default: the advisor is not registered")
     void nativeToolIoOffByDefault() {
         runner.withUserConfiguration(StubManagerConfiguration.class).run(context -> {
-            ToolCallingManager manager = context.getBean(ToolCallingManager.class);
-            assertThat(manager).isNotInstanceOf(RecordingToolCallingManager.class);
+            assertThat(context).doesNotHaveBean(UiMessageStreamToolAdvisor.class);
+            assertThat(context).doesNotHaveBean(ChatClientCustomizer.class);
         });
     }
 
     @Test
-    @DisplayName("native tool I/O on: the ToolCallingManager is wrapped with RecordingToolCallingManager")
+    @DisplayName("native tool I/O on: the advisor and customizer are registered")
     void nativeToolIoEnabledByProperty() {
         runner.withUserConfiguration(StubManagerConfiguration.class)
                 .withPropertyValues("uimessagestream.tool-io.native=true")
                 .run(context -> {
-                    ToolCallingManager manager = context.getBean(ToolCallingManager.class);
-                    assertThat(manager).isInstanceOf(RecordingToolCallingManager.class);
+                    assertThat(context).hasSingleBean(UiMessageStreamToolAdvisor.class);
+                    assertThat(context).hasSingleBean(ChatClientCustomizer.class);
                 });
     }
 

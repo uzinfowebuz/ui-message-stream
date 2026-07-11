@@ -1,6 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -237,7 +237,7 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
 
     private SerializedPartSink sinkFrom(Prompt prompt) {
         ChatOptions options = prompt.getOptions();
-        if (options instanceof ToolCallingChatOptions toolOptions) {
+        if (options instanceof ToolCallingChatOptions toolOptions && toolOptions.getToolContext() != null) {
             Object candidate = toolOptions.getToolContext().get(SINK_KEY);
             if (candidate instanceof SerializedPartSink sink) {
                 return sink;
@@ -248,7 +248,7 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
 
     private static Map<String, Boolean> decisionsFrom(Prompt prompt) {
         ChatOptions options = prompt.getOptions();
-        if (options instanceof ToolCallingChatOptions toolOptions) {
+        if (options instanceof ToolCallingChatOptions toolOptions && toolOptions.getToolContext() != null) {
             Object candidate = toolOptions.getToolContext().get(APPROVALS_KEY);
             if (candidate instanceof Map<?, ?> map) {
                 Map<String, Boolean> decisions = new LinkedHashMap<>();

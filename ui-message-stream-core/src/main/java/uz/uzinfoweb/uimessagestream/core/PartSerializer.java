@@ -1,9 +1,9 @@
 package uz.uzinfoweb.uimessagestream.core;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.LinkedHashMap;
 
@@ -47,7 +47,7 @@ public final class PartSerializer {
 
     private static ObjectMapper defaultObjectMapper() {
         return JsonMapper.builder()
-                .defaultPropertyInclusion(
+                .changeDefaultPropertyInclusion(old ->
                         JsonInclude.Value.construct(JsonInclude.Include.NON_NULL, JsonInclude.Include.NON_NULL))
                 .build();
     }
@@ -59,7 +59,7 @@ public final class PartSerializer {
         frame.putAll(part.body());
         try {
             return objectMapper.writeValueAsString(frame);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize UI message part: " + part.type(), e);
         }
     }

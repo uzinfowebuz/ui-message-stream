@@ -59,7 +59,7 @@ class DemoConfiguration {
     @Bean
     ChatClient chatClient(ToolCallingManager toolCallingManager, DemoTools demoTools) {
         return ChatClient.builder(new ScriptedChatModel(toolCallingManager))
-                .defaultTools(tools -> tools.instances(demoTools))
+                .defaultTools(demoTools)
                 .build();
     }
 

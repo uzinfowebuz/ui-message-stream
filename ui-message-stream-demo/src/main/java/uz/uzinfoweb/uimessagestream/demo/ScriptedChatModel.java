@@ -114,9 +114,6 @@ final class ScriptedChatModel implements ChatModel {
      * not forwarded downstream — same as the real provider implementations.
      */
     private Flux<ChatResponse> executeToolsAndContinue(Prompt prompt, ChatResponse toolCallResponse) {
-        if (!ToolCallingChatOptions.isInternalToolExecutionEnabled(prompt.getOptions())) {
-            return Flux.just(toolCallResponse);
-        }
         ToolExecutionResult result = toolCallingManager.executeToolCalls(prompt, toolCallResponse);
         if (result.returnDirect()) {
             // Approval pending: the manager already emitted tool-approval-request; end this turn.

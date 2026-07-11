@@ -91,7 +91,7 @@ class ChatController {
         return chatClient.prompt()
                 .messages(messages)
                 .advisors(new UiMessageStreamAdvisor(sink))
-                .tools(tools -> tools.context(RecordingToolCallingManager.APPROVALS_KEY, decisions))
+                .toolContext(Map.of(RecordingToolCallingManager.APPROVALS_KEY, decisions))
                 .stream()
                 .chatClientResponse();
     }

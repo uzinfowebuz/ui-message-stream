@@ -1,20 +1,20 @@
 package uz.uzinfoweb.uimessagestream.autoconfigure;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import org.springframework.ai.chat.client.ChatClientCustomizer;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.env.Environment;
 import uz.uzinfoweb.uimessagestream.spring.ApprovalPolicy;
 import uz.uzinfoweb.uimessagestream.spring.ChatClientResponseMapper;
 import uz.uzinfoweb.uimessagestream.spring.ErrorMessageResolver;
-import uz.uzinfoweb.uimessagestream.spring.RecordingToolCallingManager;
 import uz.uzinfoweb.uimessagestream.spring.ResponseMapper;
+import uz.uzinfoweb.uimessagestream.spring.UiMessageStreamToolAdvisor;
 
 /**
  * Registers the default {@link ResponseMapper} so applications can inject it (and pass it to
@@ -58,48 +58,38 @@ public class UiMessageStreamAutoConfiguration {
     }
 
     /**
-     * Opt-in: wraps the {@link ToolCallingManager} bean with a {@link RecordingToolCallingManager},
-     * honouring the {@code dynamic} flag and the application's {@link ApprovalPolicy}. Declared
-     * {@code static} so it is instantiated early enough to post-process the manager.
+     * Opt-in: registers a {@link UiMessageStreamToolAdvisor} that natively surfaces tool
+     * input/output.
      */
     @Bean
     @ConditionalOnProperty(prefix = "uimessagestream.tool-io", name = "native", havingValue = "true")
-    static BeanPostProcessor uiMessageStreamRecordingToolCallingManager(
-            Environment environment, ObjectProvider<ApprovalPolicy> approvalPolicy,
+    @ConditionalOnBean(ToolCallingManager.class)
+    public UiMessageStreamToolAdvisor uiMessageStreamToolAdvisor(
+            ToolCallingManager toolCallingManager,
+            @Value("${uimessagestream.tool-io.dynamic:true}") boolean dynamicTools,
+            @Value("${uimessagestream.errors.include-message:false}") boolean includeMessage,
+            ObjectProvider<ApprovalPolicy> approvalPolicy,
             ObjectProvider<ErrorMessageResolver> errorMessages) {
-        // Read from Environment, not @Value: a static BeanPostProcessor is instantiated before the
-        // property-placeholder configurer, so a ${...} parameter would arrive unresolved.
-        boolean dynamicTools = environment.getProperty("uimessagestream.tool-io.dynamic", Boolean.class, true);
-        boolean includeMessage = environment.getProperty("uimessagestream.errors.include-message", Boolean.class, false);
-        return new RecordingToolCallingManagerPostProcessor(dynamicTools, includeMessage, approvalPolicy, errorMessages);
+
+        ApprovalPolicy policy = approvalPolicy.getIfAvailable(() -> ApprovalPolicy.NONE);
+        ErrorMessageResolver resolver = errorMessages.getIfAvailable(() ->
+                includeMessage ? ErrorMessageResolver.MESSAGE : ErrorMessageResolver.MASKED);
+
+        return UiMessageStreamToolAdvisor.uiMessageStreamBuilder()
+                .toolCallingManager(toolCallingManager)
+                .jsonParser(new ObjectMapper())
+                .dynamic(dynamicTools)
+                .approvalPolicy(policy)
+                .errorMessages(resolver)
+                .build();
     }
 
-    /** Wraps any {@link ToolCallingManager} bean with a {@link RecordingToolCallingManager} (once). */
-    static final class RecordingToolCallingManagerPostProcessor implements BeanPostProcessor {
-
-        private final boolean dynamicTools;
-        private final boolean includeErrorMessage;
-        private final ObjectProvider<ApprovalPolicy> approvalPolicy;
-        private final ObjectProvider<ErrorMessageResolver> errorMessages;
-
-        RecordingToolCallingManagerPostProcessor(boolean dynamicTools, boolean includeErrorMessage,
-                                                 ObjectProvider<ApprovalPolicy> approvalPolicy,
-                                                 ObjectProvider<ErrorMessageResolver> errorMessages) {
-            this.dynamicTools = dynamicTools;
-            this.includeErrorMessage = includeErrorMessage;
-            this.approvalPolicy = approvalPolicy;
-            this.errorMessages = errorMessages;
-        }
-
-        @Override
-        public Object postProcessAfterInitialization(Object bean, String beanName) {
-            if (bean instanceof ToolCallingManager manager && !(bean instanceof RecordingToolCallingManager)) {
-                ApprovalPolicy policy = approvalPolicy.getIfAvailable(() -> ApprovalPolicy.NONE);
-                ErrorMessageResolver resolver = errorMessages.getIfAvailable(() ->
-                        includeErrorMessage ? ErrorMessageResolver.MESSAGE : ErrorMessageResolver.MASKED);
-                return new RecordingToolCallingManager(manager, new ObjectMapper(), dynamicTools, policy, resolver);
-            }
-            return bean;
-        }
+    /**
+     * Automatically adds the {@link UiMessageStreamToolAdvisor} to all {@code ChatClient} instances.
+     */
+    @Bean
+    @ConditionalOnBean(UiMessageStreamToolAdvisor.class)
+    public ChatClientCustomizer uiMessageStreamChatClientCustomizer(UiMessageStreamToolAdvisor advisor) {
+        return builder -> builder.defaultAdvisors(advisor);
     }
 }
