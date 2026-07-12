@@ -14,7 +14,7 @@ import java.util.Map;
 /**
  * The default {@link ResponseMapper} for a Spring AI {@code ChatClient} response stream.
  *
- * <p>Grounded in the real Spring AI 2.0.0-M8 API:
+ * <p>Grounded in the Spring AI 2.0.0 API:
  * <pre>{@code chatClientResponse.chatResponse().getResults().get(0).getOutput()}</pre>
  * yields an {@link AssistantMessage}, from which we read {@link AssistantMessage#getText()} and
  * {@link AssistantMessage#getToolCalls()} ({@code ToolCall.id()/name()/arguments()}).

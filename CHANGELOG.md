@@ -6,6 +6,29 @@ All notable changes to **ui-message-stream** are documented here. The format is 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-11
+
+Spring Boot 4.1 and Spring AI 2.0 compatibility release.
+
+### Changed
+
+- Upgraded the build to Spring Boot `4.1.0`, Spring AI `2.0.0`, Java `25`, Maven Wrapper `3.3.4`,
+  and Maven `3.9.16`; Maven `3.9.16+` and Java `25` are enforced during `validate`.
+- Migrated app-owned JSON serialization to Jackson 3 `ObjectMapper`.
+- Replaced global `ToolCallingManager` bean post-processing with `UiMessageStreamToolAdvisor`, a
+  supported Spring AI `ToolCallingAdvisor` extension whose private recording manager preserves tool
+  input/output, approval, denial, error, ordering, and cancellation behavior.
+- Replaced deprecated `ChatClientCustomizer` usage with `ChatClientBuilderCustomizer` and retained
+  opt-in starter registration through `uimessagestream.tool-io.native=true`.
+- Updated the offline demo model to return tool calls for advisor-owned execution and to advertise
+  `ToolCallingChatOptions` through the current `ChatModel.getOptions()` contract.
+- Replaced the deprecated demo web starter alias with `spring-boot-starter-webmvc`.
+
+### Verification
+
+- Added a streaming integration test that proves the custom advisor owns the loop and emits
+  `tool-input-available` before `tool-output-available`.
+
 ## [0.3.0] - 2026-06-12
 
 Security-hardening release plus ChatClient ergonomics: safer defaults for error disclosure, inbound
@@ -134,7 +157,8 @@ Java 25.
 - **OSS readiness**: Apache-2.0 `LICENSE` + `NOTICE`, complete POM metadata, and a `release` profile
   (sources + javadoc jars, GPG signing, `central-publishing-maven-plugin`) for Maven Central.
 
-[Unreleased]: https://github.com/uzinfowebuz/ui-message-stream/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/uzinfowebuz/ui-message-stream/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.4.0
 [0.3.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.3.0
 [0.2.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.2.0
 [0.1.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.1.0

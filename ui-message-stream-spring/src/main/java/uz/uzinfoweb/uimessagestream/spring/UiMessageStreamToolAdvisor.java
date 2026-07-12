@@ -9,8 +9,8 @@ import org.springframework.ai.model.tool.ToolExecutionEligibilityChecker;
  * A specialized {@link ToolCallingAdvisor} that uses {@link RecordingToolCallingManager}
  * to natively surface tool input/output and implement the HITL approval gate.
  *
- * <p>By using this advisor instead of a global {@link RecordingToolCallingManager}
- * (via BeanPostProcessor), applications can opt-in to recording per-ChatClient.
+ * <p>The recording manager remains private to this advisor's tool loop, allowing applications to
+ * opt in per {@code ChatClient} without replacing the global {@link ToolCallingManager} bean.
  */
 public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
 

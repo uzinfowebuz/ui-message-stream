@@ -48,11 +48,11 @@ curl -N localhost:8080/api/protocol-tour
 | Reactive SSE bridge + required headers | `ChatController.chat` | `UiMessageStream.from` + `UiMessageStreamResponse.of` |
 | Servlet SSE bridge | `ChatController.chatMvc` | `UiMessageStreamEmitter.from` + `UiMessageStreamHttp.applyHeaders` |
 | Sink injection via advisor (no manual `toolContext` map) | `ChatController.upstream` | `UiMessageStreamAdvisor` |
-| Native tool input/output frames | `application.yaml` → `uimessagestream.tool-io.native=true` | `RecordingToolCallingManager` (auto-wrapped by the starter) |
+| Native tool input/output frames | `application.yaml` → `uimessagestream.tool-io.native=true` | `UiMessageStreamToolAdvisor` with an advisor-private recording manager |
 | Custom `data-*` part from inside a tool | `DemoTools.getWeather` | `SerializedPartSink.data` |
 | Human-in-the-loop approval | `DemoConfiguration.approvalPolicy`, decisions in `ChatController.upstream` | `ApprovalPolicy`, `UiMessageRequestAdapter.toolApprovalDecisions` |
 | Tool failure → `tool-output-error` | `DemoTools.brokenTool` + throwing `DefaultToolExecutionExceptionProcessor` | `ErrorMessageResolver` (masked by default) |
-| Mapper override (text-only, tools come from the manager) | `DemoConfiguration.responseMapper` | `ResponseMapper` bean replaces the starter default |
+| Mapper override (text-only, tools come from the advisor) | `DemoConfiguration.responseMapper` | `ResponseMapper` bean replaces the starter default |
 | Imperative producer, all frame kinds | `ChatController.protocolTour` | `UiMessageStream.create` |
 
 ## Swap in a real model
@@ -60,5 +60,6 @@ curl -N localhost:8080/api/protocol-tour
 `ScriptedChatModel` exists only so the demo runs offline. To use a real provider, delete it and the
 `chatClient`/`toolCallingManager` beans, add e.g. `spring-ai-starter-model-openai` (or
 `google-genai`, ...), configure your key — Spring AI auto-configures `ChatClient.Builder` and
-`ToolCallingManager`, and the starter's `uimessagestream.tool-io.native=true` wraps that real
-manager exactly the way it wraps the demo's. The controller code does not change.
+`ToolCallingManager`, and the starter's `uimessagestream.tool-io.native=true` adds its custom
+`ToolAdvisor` to the managed builder without replacing the manager. The controller code does not
+change.

@@ -1,11 +1,43 @@
 # Native Spring AI integration
 
-> **Status:** design / research note. Nothing here changes the published jars yet — `ui-message-stream`
-> today integrates with Spring AI through a single seam (`ResponseMapper` over a `ChatClient` response
-> `Flux`). This document records the deeper integration options discovered against the **real Spring AI
-> 2.0.0-M8 API** (every signature below was confirmed with `javap` on the resolved jars, not assumed),
-> so a future "native tool I/O" feature can be added deliberately without breaking the library's purity
-> rules.
+> **Status:** implemented in `0.4.0` against Spring AI `2.0.0`. Sections 1–12 below preserve the
+> milestone-era research that led to the implementation; they are historical and must not be used as
+> current Spring AI API guidance.
+
+## Current design (`0.4.0`)
+
+Spring AI `2.0.0` moved the tool-execution loop out of model implementations and into
+`ToolCallingAdvisor`. The library therefore uses a custom `ToolAdvisor`, not a global
+`ToolCallingManager` replacement:
+
+1. `UiMessageStreamAdvisor` places the request's `SerializedPartSink` into tool context.
+2. `UiMessageStreamToolAdvisor` extends Spring AI's supported `ToolCallingAdvisor` and owns the loop.
+3. Its private `RecordingToolCallingManager` decorates the application manager for that advisor only,
+   emitting input, output, error, denial, and approval parts in call order.
+4. The starter exposes a `ChatClientBuilderCustomizer`, so Boot-managed clients receive the custom
+   advisor without bean post-processing or global manager mutation.
+5. `ChatClientResponseMapper.TEXT_ONLY` maps model text while the advisor emits tool parts, preventing
+   duplicate tool-input frames.
+
+```mermaid
+flowchart TD
+    A[ChatClient] -->|request| B[UiMessageStreamAdvisor]
+    B -->|sink context| C[UiMessageStreamToolAdvisor]
+    C -->|delegates| D[RecordingToolCallingManager]
+    D -->|executes| E[Application ToolCallingManager]
+    E -->|calls| F[ToolCallback]
+    D -->|emits parts| G[SerializedPartSink]
+```
+
+The custom advisor implements Spring AI's `ToolAdvisor` marker, so `DefaultChatClient` suppresses its
+automatic default tool advisor and enforces a single loop owner. Scripted/custom `ChatModel`
+implementations must return `ToolCallingChatOptions` from `getOptions()`; real provider models already
+do this.
+
+## Historical research snapshot (`0.2.0` / Spring AI `2.0.0-M8`)
+
+The remainder describes the old model-internal execution architecture and is retained only to explain
+why `RecordingToolCallingManager` and the approval protocol were originally designed as they were.
 
 ## 1. The problem this is solving
 
@@ -270,7 +302,7 @@ library a pure mapper and publish this only as a recipe is a **purity trade-off*
 call before any code is added. This document is the research; it intentionally adds **no** new production
 code.
 
-## 12. Shipped (v0.2.0): Seam A + the human-in-the-loop approval gate
+## 12. Historical release (`0.2.0`): Seam A + the human-in-the-loop approval gate
 
 The §11 trade-off was resolved in favour of shipping Seam A as opt-in. As of **0.2.0**:
 
@@ -296,3 +328,12 @@ The §11 trade-off was resolved in favour of shipping Seam A as opt-in. As of **
 Cross-request continuity is intentionally the application's responsibility (stateless replay, keyed by a
 stable `toolCallId`); the library ships the wire parts, the inbound parsing and the gate — not a
 server-side session store. Seams B–E remain research, as above.
+
+## 13. Shipped (`0.4.0`): supported advisor-owned tool loop
+
+Spring AI `2.0.0` removed model-internal tool execution, making the milestone-era global decorator
+strategy invalid. Version `0.4.0` keeps `RecordingToolCallingManager` as an internal implementation
+detail of `UiMessageStreamToolAdvisor`, registers the advisor through `ChatClientBuilderCustomizer`, and
+leaves the application's `ToolCallingManager` bean untouched. The same approval, error, cancellation,
+ordering, and UI-message wire contracts are retained and covered by manager, auto-configuration, and
+streaming advisor tests.

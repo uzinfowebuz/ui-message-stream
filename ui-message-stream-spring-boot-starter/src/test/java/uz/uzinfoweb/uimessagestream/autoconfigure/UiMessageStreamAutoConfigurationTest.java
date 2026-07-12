@@ -2,7 +2,7 @@ package uz.uzinfoweb.uimessagestream.autoconfigure;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.client.ChatClientCustomizer;
+import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -45,7 +45,7 @@ class UiMessageStreamAutoConfigurationTest {
     void nativeToolIoOffByDefault() {
         runner.withUserConfiguration(StubManagerConfiguration.class).run(context -> {
             assertThat(context).doesNotHaveBean(UiMessageStreamToolAdvisor.class);
-            assertThat(context).doesNotHaveBean(ChatClientCustomizer.class);
+            assertThat(context).doesNotHaveBean(ChatClientBuilderCustomizer.class);
         });
     }
 
@@ -56,7 +56,7 @@ class UiMessageStreamAutoConfigurationTest {
                 .withPropertyValues("uimessagestream.tool-io.native=true")
                 .run(context -> {
                     assertThat(context).hasSingleBean(UiMessageStreamToolAdvisor.class);
-                    assertThat(context).hasSingleBean(ChatClientCustomizer.class);
+                    assertThat(context).hasSingleBean(ChatClientBuilderCustomizer.class);
                 });
     }
 

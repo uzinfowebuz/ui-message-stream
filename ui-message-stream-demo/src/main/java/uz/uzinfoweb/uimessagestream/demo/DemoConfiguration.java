@@ -1,6 +1,7 @@
 package uz.uzinfoweb.uimessagestream.demo;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
 import org.springframework.ai.model.tool.DefaultToolCallingManager;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.support.ToolCallbacks;
@@ -22,13 +23,11 @@ import java.util.List;
  * <ul>
  *   <li>{@link #responseMapper()} overrides the starter's default mapper
  *       ({@code @ConditionalOnMissingBean}) with {@code TEXT_ONLY}, because native tool I/O is on
- *       and the {@code RecordingToolCallingManager} emits tool frames — the mapper must not
+ *       and the {@code UiMessageStreamToolAdvisor} emits tool frames — the mapper must not
  *       duplicate them;</li>
  *   <li>{@link #approvalPolicy()} gates {@code transferFunds} behind human approval;</li>
- *   <li>{@link #toolCallingManager(DemoTools)} is the plain Spring AI manager — with
- *       {@code uimessagestream.tool-io.native=true} the starter's {@code BeanPostProcessor} wraps it
- *       into a {@code RecordingToolCallingManager} automatically; nothing here references the
- *       decorator.</li>
+ *   <li>{@link #toolCallingManager(DemoTools)} is the plain Spring AI manager used by the starter's
+ *       advisor; the global manager bean is never replaced.</li>
  * </ul>
  */
 @Configuration(proxyBeanMethods = false)
@@ -52,18 +51,15 @@ class DemoConfiguration {
                 .build();
     }
 
-    /**
-     * The injected {@code toolCallingManager} is already the recording decorator here (the starter's
-     * post-processor wrapped it), exactly as it would be with a real provider's auto-configured model.
-     */
     @Bean
-    ChatClient chatClient(ToolCallingManager toolCallingManager, DemoTools demoTools) {
-        return ChatClient.builder(new ScriptedChatModel(toolCallingManager))
-                .defaultTools(demoTools)
-                .build();
+    ChatClient chatClient(DemoTools demoTools, ChatClientBuilderCustomizer customizer) {
+        ChatClient.Builder builder = ChatClient.builder(new ScriptedChatModel())
+                .defaultTools(demoTools);
+        customizer.customize(builder);
+        return builder.build();
     }
 
-    /** Overrides the starter's default mapper: tool frames come from the recording manager only. */
+    /** Overrides the starter's default mapper: tool frames come from the tool advisor only. */
     @Bean
     ResponseMapper responseMapper() {
         return ChatClientResponseMapper.TEXT_ONLY;

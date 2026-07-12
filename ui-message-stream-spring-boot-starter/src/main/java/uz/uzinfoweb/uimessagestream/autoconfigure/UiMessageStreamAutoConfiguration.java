@@ -1,7 +1,7 @@
 package uz.uzinfoweb.uimessagestream.autoconfigure;
 
 import tools.jackson.databind.ObjectMapper;
-import org.springframework.ai.chat.client.ChatClientCustomizer;
+import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,9 +26,8 @@ import uz.uzinfoweb.uimessagestream.spring.UiMessageStreamToolAdvisor;
  *   <li>{@code dynamic} (default {@code true}) — tag tool parts {@code "dynamic":true} so the client
  *       renders them via its generic {@code dynamic-tool} path; feeds both the default mapper and the
  *       opt-in recording manager.</li>
- *   <li>{@code native} (default {@code false}) — wrap the application's {@link ToolCallingManager} with
- *       a {@link RecordingToolCallingManager} so tool input + output (and the HITL approval gate) are
- *       emitted natively into the per-request
+ *   <li>{@code native} (default {@code false}) — register a {@link UiMessageStreamToolAdvisor} so
+ *       tool input + output (and the HITL approval gate) are emitted natively into the per-request
  *       {@link uz.uzinfoweb.uimessagestream.spring.SerializedPartSink}.</li>
  * </ul>
  *
@@ -89,7 +88,7 @@ public class UiMessageStreamAutoConfiguration {
      */
     @Bean
     @ConditionalOnBean(UiMessageStreamToolAdvisor.class)
-    public ChatClientCustomizer uiMessageStreamChatClientCustomizer(UiMessageStreamToolAdvisor advisor) {
+    public ChatClientBuilderCustomizer uiMessageStreamChatClientCustomizer(UiMessageStreamToolAdvisor advisor) {
         return builder -> builder.defaultAdvisors(advisor);
     }
 }

@@ -51,11 +51,11 @@ Spring AI backend to a `useChat` frontend.
 | Module | Depends on | Purpose |
 |--------|------------|---------|
 | `ui-message-stream-core` | **Jackson only** | `UiMessagePart` (sealed records), `PartSerializer`, the stateful `UiMessageStreamWriter`. No Spring / Reactor / Spring AI — by design. |
-| `ui-message-stream-spring` | core + spring-web + spring-webmvc + reactor + spring-ai *(all `provided`)* | Reactive `UiMessageStream` **and** servlet `UiMessageStreamEmitter` transports; `ResponseMapper` / `ChatClientResponseMapper.DEFAULT` + `.TEXT_ONLY`; `UiMessageStreamResponse` / `UiMessageStreamHttp`; the thread-safe per-request `SerializedPartSink` + `UiMessageStreamAdvisor` (sink injection via the `ChatClient` advisor chain); opt-in native tool I/O (`RecordingToolCallingManager`); inbound `UiMessageRequest` + adapter + pluggable `MediaResolver`. |
-| `ui-message-stream-spring-boot-starter` | core + spring | `@AutoConfiguration` exposing the default `ResponseMapper` (`@ConditionalOnMissingBean`). |
+| `ui-message-stream-spring` | core + spring-web + spring-webmvc + reactor + spring-ai *(all `provided`)* | Reactive `UiMessageStream` **and** servlet `UiMessageStreamEmitter` transports; `ResponseMapper` / `ChatClientResponseMapper.DEFAULT` + `.TEXT_ONLY`; `UiMessageStreamResponse` / `UiMessageStreamHttp`; the thread-safe per-request `SerializedPartSink` + `UiMessageStreamAdvisor` (sink injection via the `ChatClient` advisor chain); opt-in native tool I/O (`UiMessageStreamToolAdvisor`); inbound `UiMessageRequest` + adapter + pluggable `MediaResolver`. |
+| `ui-message-stream-spring-boot-starter` | core + spring | `@AutoConfiguration` exposing the default `ResponseMapper` and, when enabled, the custom tool advisor plus a `ChatClientBuilderCustomizer`. |
 | `ui-message-stream-demo` *(not published)* | starter | Runnable showcase app — see below. |
 
-Built against Spring Boot 4.0.6 (Spring Framework 7) and Spring AI 2.0.0-M8, Java 25.
+Built against Spring Boot 4.1.0 (Spring Framework 7) and Spring AI 2.0.0, Java 25.
 
 ## Try it: the demo app
 
@@ -89,7 +89,7 @@ repository and depend on the starter using JitPack's multi-module coordinate
 <dependency>
     <groupId>com.github.uzinfowebuz.ui-message-stream</groupId>
     <artifactId>ui-message-stream-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -152,17 +152,19 @@ SseEmitter chat(@RequestBody UiMessageRequest body, HttpServletResponse response
 
 ### Native tool input + output (opt-in)
 
-Spring AI runs tools internally, so the default mapper emits `tool-input-available` but never
-`tool-output-available`. Opt in to native tool I/O via the starter:
+Spring AI 2.0 executes tools through a `ToolCallingAdvisor`. The default response mapper can map model
+tool calls, but it does not receive the `ToolCallingManager` result as a distinct response chunk. Opt in
+to the library's custom tool advisor to record both sides of the loop:
 
 ```properties
 uimessagestream.tool-io.native=true
 ```
 
-Then create a per-request `SerializedPartSink`, publish it in the tool context, and pass the same
-sink to the transport. A `RecordingToolCallingManager` emits `tool-input-available` +
-`tool-output-available` (paired by `toolCallId`) onto that sink, serialized with the model's text.
-The idiomatic way to publish the sink is the `UiMessageStreamAdvisor` (a Spring AI `StreamAdvisor`):
+Then create a per-request `SerializedPartSink`, publish it in the tool context, and pass the same sink
+to the transport. `UiMessageStreamToolAdvisor` owns the Spring AI tool loop and delegates execution
+through its private `RecordingToolCallingManager`, which emits paired `tool-input-available` and
+`tool-output-available` parts onto that sink. The idiomatic way to publish the sink is the
+`UiMessageStreamAdvisor` (a Spring AI `StreamAdvisor`):
 
 ```java
 SerializedPartSink sink = new SerializedPartSink();
@@ -186,9 +188,9 @@ sink.data("artifact", Map.of("id", "a1", "kind", "quiz"));
 
 ### Tool-call errors and human-in-the-loop approval (opt-in)
 
-With native tool I/O enabled, `RecordingToolCallingManager` also emits `tool-output-error` when a tool
-throws (opt into a throwing `ToolExecutionExceptionProcessor` so a failure surfaces instead of becoming
-an ordinary tool result).
+With native tool I/O enabled, the advisor's recording manager also emits `tool-output-error` when a
+tool throws (opt into a throwing `ToolExecutionExceptionProcessor` so a failure surfaces instead of
+becoming an ordinary tool result).
 
 For human-in-the-loop, declare an `ApprovalPolicy` bean to gate specific tools:
 
@@ -232,8 +234,8 @@ history, keyed by a stable `toolCallId`) — it does not persist server-side ses
 
 - **Error masking.** Failures stream as `{"type":"error","errorText":"An error occurred."}` —
   exception messages are never sent to the client by default (they leak paths, hosts, SQL, provider
-  error bodies). Opt in per transport/manager with `ErrorMessageResolver.MESSAGE` (or your own
-  resolver), or set `uimessagestream.errors.include-message=true` for the starter-wired tool manager.
+  error bodies). Opt in per transport/advisor with `ErrorMessageResolver.MESSAGE` (or your own
+  resolver), or set `uimessagestream.errors.include-message=true` for the starter-wired tool advisor.
 - **Inbound `system` messages are dropped.** `useChat` never sends `role:"system"`; honouring one from
   the request body would let any client override your server-side system prompt. Opt in (only if you
   knowingly round-trip your own system message) via
@@ -249,24 +251,20 @@ cd ui-message-stream
 ./mvnw clean install
 ```
 
-## Native Spring AI integration (design note)
+## Native Spring AI integration
 
-The default path above (`ResponseMapper` over a `ChatClient` response `Flux`) is the simplest seam, but
-Spring AI exposes deeper ones. [`docs/native-spring-ai-integration.md`](docs/native-spring-ai-integration.md)
-maps **all five** native seams discovered against the real Spring AI 2.0.0-M8 API — the `ToolCallingManager`
-decorator (the only seam that natively surfaces tool **input + output**), the Advisors API
-(`StreamAdvisor`), `ToolCallback`, `ChatModel`, and Micrometer Observation — with a layered diagram, a
-comparison table, the recommended advisor + tool-manager design, and the purity guardrails. Seam A
-(the `ToolCallingManager` decorator) is now **shipped** as the opt-in `RecordingToolCallingManager`
-(see *Native tool input + output* above); the note remains the reference for the other seams.
+The default path above (`ResponseMapper` over a `ChatClient` response `Flux`) remains the simplest seam.
+[`docs/native-spring-ai-integration.md`](docs/native-spring-ai-integration.md) records how the shipped
+Spring AI 2.0 integration composes `UiMessageStreamAdvisor`, `UiMessageStreamToolAdvisor`, and the
+advisor-private recording manager without replacing the application's global tool manager.
 
 ## Notes & extension points
 
 - **`tool-output-available`** is not emitted by the *default* mapper (`ChatClientResponseMapper.DEFAULT`
-  emits text + `tool-input-available`): Spring AI executes tools internally and does not surface a
-  distinct tool-result element on the `chatClientResponse()` stream. Enable the opt-in
-  `RecordingToolCallingManager` (see *Native tool input + output*) to emit both natively, or drive the
-  writer yourself if your app manages tools manually. The default mapper assumes a provider that
+  emits text + `tool-input-available`): the manager result is not a distinct element on the
+  `chatClientResponse()` stream. Enable the opt-in `UiMessageStreamToolAdvisor` (see *Native tool input
+  + output*) to emit both natively, or drive the writer yourself if your app manages tools manually.
+  The default mapper assumes a provider that
   delivers each tool call as one complete unit (e.g. Google GenAI / Gemini); providers that stream
   partial argument deltas should supply a custom mapper.
 - **`file` → `Media`** inbound conversion is handled by `UiMessageRequestAdapter` via a pluggable

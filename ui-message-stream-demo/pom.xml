@@ -39,7 +39,7 @@
              (Flux<ServerSentEvent>) return values, and SseEmitter is MVC-native. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
         <!-- Spring AI: ChatClient + the tool-calling machinery. The library declares these

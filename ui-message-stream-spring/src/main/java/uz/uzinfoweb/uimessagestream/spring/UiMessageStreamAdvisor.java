@@ -2,6 +2,7 @@ package uz.uzinfoweb.uimessagestream.spring;
 
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -17,7 +18,7 @@ import java.util.Objects;
  * application {@code @Tool} that needs the sink) can find it without the controller needing to call
  * {@code .toolContext(Map.of(RecordingToolCallingManager.SINK_KEY, sink))} explicitly.
  *
- * <h3>Usage</h3>
+ * <h2>Usage</h2>
  * <pre>{@code
  * SerializedPartSink sink = new SerializedPartSink();
  * Flux<ChatClientResponse> upstream = chatClient.prompt()

@@ -9,14 +9,11 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import org.springframework.ai.model.tool.ToolCallingManager;
-import org.springframework.ai.model.tool.ToolExecutionResult;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,13 +21,9 @@ import java.util.regex.Pattern;
 /**
  * An offline, deterministic Spring AI {@link ChatModel} so the demo runs with <b>zero API keys</b>.
  *
- * <p>It faithfully mirrors how real provider implementations (OpenAI, Gemini, ...) drive the
- * tool-calling loop in Spring AI 2.x: when a response carries tool calls and internal tool execution
- * is enabled, the model itself invokes {@link ToolCallingManager#executeToolCalls} and then re-calls
- * itself with the augmented conversation. Because the demo wires
- * {@code uimessagestream.tool-io.native=true}, the manager bean injected here is the library's
- * {@code RecordingToolCallingManager} decorator — so tool input/output frames and the
- * human-in-the-loop approval gate behave exactly as they would against a real provider.
+ * <p>It mirrors Spring AI 2.x provider behavior by returning tool-call responses without executing
+ * them. The starter's {@code UiMessageStreamToolAdvisor} owns the tool loop, records tool frames,
+ * applies the approval policy, and calls this model again with the augmented conversation.
  *
  * <p>The script is keyword-driven on the last user message:
  * <ul>
@@ -39,30 +32,14 @@ import java.util.regex.Pattern;
  *   <li><b>time</b> &rarr; calls {@code getCurrentTime};</li>
  *   <li><b>transfer</b> &rarr; calls {@code transferFunds}, gated by the demo's
  *       {@code ApprovalPolicy} (the stream pauses with {@code tool-approval-request});</li>
- *   <li><b>fail</b> &rarr; calls {@code brokenTool}, which throws (&rarr; {@code tool-output-error}
- *       with the masked message);</li>
- *   <li>anything else &rarr; a plain streamed text reply.</li>
- * </ul>
- *
- * <p>Two non-user turn shapes complete the loop:
- * <ul>
- *   <li>history ending in an {@link AssistantMessage} with tool calls (the client replayed an
- *       approval turn): the same calls are re-emitted with their original ids so the manager can
- *       match the user's approve/deny decisions;</li>
- *   <li>history ending in a {@link ToolResponseMessage} (a tool just ran): a closing text reply
- *       summarising the tool result is streamed.</li>
+ *   <li><b>fail</b> &rarr; calls {@code brokenTool}, producing {@code tool-output-error};</li>
+ *   <li>anything else &rarr; plain multi-delta text.</li>
  * </ul>
  */
 final class ScriptedChatModel implements ChatModel {
 
-    private static final Pattern CITY = Pattern.compile("\\b(?:in|for)\\s+([A-Z][\\p{L}-]+)");
-    private static final Duration DELTA_INTERVAL = Duration.ofMillis(40);
-
-    private final ToolCallingManager toolCallingManager;
-
-    ScriptedChatModel(ToolCallingManager toolCallingManager) {
-        this.toolCallingManager = Objects.requireNonNull(toolCallingManager, "toolCallingManager");
-    }
+    private static final Duration DELTA_INTERVAL = Duration.ofMillis(28);
+    private static final Pattern CITY = Pattern.compile("(?i)weather(?:\\s+in)?\\s+([A-Za-z]+)");
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
@@ -70,24 +47,27 @@ final class ScriptedChatModel implements ChatModel {
             Message last = lastMessage(prompt);
 
             // Replayed approval turn: the client resent history ending in our earlier tool call.
-            // Re-emit the same calls (same ids) so the manager can match the inbound decisions.
+            // Re-emit the same calls (same ids) so the advisor can match the inbound decisions.
             if (last instanceof AssistantMessage assistant && assistant.hasToolCalls()) {
-                return executeToolsAndContinue(prompt, response(assistant));
+                return Flux.just(response(assistant));
             }
 
-            // A tool just executed (or was denied): stream the closing answer.
+            // Normal second half of a tool turn — summarise the result back to the user.
             if (last instanceof ToolResponseMessage toolResponse) {
                 return streamText(closingReply(toolResponse));
             }
 
-            Turn turn = Turn.forUserText(lastUserText(prompt));
+            String userText = lastUserText(prompt);
+            Turn turn = Turn.forUserText(userText);
+
             if (turn.toolCall() == null) {
                 return streamText(turn.preamble());
             }
+
             ChatResponse toolCallResponse = response(
                     AssistantMessage.builder().content("").toolCalls(List.of(turn.toolCall())).build());
             return streamText(turn.preamble())
-                    .concatWith(Flux.defer(() -> executeToolsAndContinue(prompt, toolCallResponse)));
+                    .concatWithValues(toolCallResponse);
         });
     }
 
@@ -98,7 +78,11 @@ final class ScriptedChatModel implements ChatModel {
         StringBuilder text = new StringBuilder();
         if (all != null) {
             for (ChatResponse response : all) {
-                String delta = response.getResults().getFirst().getOutput().getText();
+                AssistantMessage output = response.getResults().getFirst().getOutput();
+                if (output.hasToolCalls()) {
+                    return response;
+                }
+                String delta = output.getText();
                 if (delta != null) {
                     text.append(delta);
                 }
@@ -107,19 +91,9 @@ final class ScriptedChatModel implements ChatModel {
         return response(new AssistantMessage(text.toString()));
     }
 
-    /**
-     * The provider-side half of Spring AI's tool loop: hand the tool-call response to the
-     * {@link ToolCallingManager} (here: the recording decorator), then either stop (approval pending,
-     * {@code returnDirect}) or recurse with the augmented history. The tool-call response itself is
-     * not forwarded downstream — same as the real provider implementations.
-     */
-    private Flux<ChatResponse> executeToolsAndContinue(Prompt prompt, ChatResponse toolCallResponse) {
-        ToolExecutionResult result = toolCallingManager.executeToolCalls(prompt, toolCallResponse);
-        if (result.returnDirect()) {
-            // Approval pending: the manager already emitted tool-approval-request; end this turn.
-            return Flux.empty();
-        }
-        return stream(new Prompt(result.conversationHistory(), prompt.getOptions()));
+    @Override
+    public ToolCallingChatOptions getOptions() {
+        return ToolCallingChatOptions.builder().build();
     }
 
     /** Streams {@code text} as word-sized {@link ChatResponse} deltas, like a real provider would. */

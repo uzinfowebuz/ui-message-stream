@@ -1,0 +1,22 @@
+{
+  "properties": [
+    {
+      "name": "uimessagestream.tool-io.dynamic",
+      "type": "java.lang.Boolean",
+      "description": "Whether tool parts are tagged for the client's generic dynamic-tool rendering path.",
+      "defaultValue": true
+    },
+    {
+      "name": "uimessagestream.tool-io.native",
+      "type": "java.lang.Boolean",
+      "description": "Whether native Spring AI tool input and output streaming is enabled.",
+      "defaultValue": false
+    },
+    {
+      "name": "uimessagestream.errors.include-message",
+      "type": "java.lang.Boolean",
+      "description": "Whether tool errors expose their raw exception message instead of a masked message.",
+      "defaultValue": false
+    }
+  ]
+}
