@@ -1,6 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -42,7 +42,7 @@ import java.util.Map;
  */
 public final class ChatClientResponseMapper {
 
-    private static final ObjectMapper ARGUMENT_PARSER = new ObjectMapper();
+    private static final JsonMapper ARGUMENT_PARSER = new JsonMapper();
 
     /** The shared default mapper: text + {@code tool-input-available} tagged {@code dynamic:true}. */
     public static final ResponseMapper DEFAULT = withDynamicTools(true);

@@ -1,6 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionEligibilityChecker;
@@ -15,7 +15,7 @@ import org.springframework.ai.model.tool.ToolExecutionEligibilityChecker;
 public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
 
     public UiMessageStreamToolAdvisor(ToolCallingManager delegate,
-                                      ObjectMapper jsonParser,
+                                      JsonMapper jsonParser,
                                       boolean dynamic,
                                       ApprovalPolicy approvalPolicy,
                                       ErrorMessageResolver errorMessages) {
@@ -31,7 +31,7 @@ public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
 
     public static class UiMessageStreamBuilder {
         private ToolCallingManager toolCallingManager;
-        private ObjectMapper jsonParser = new ObjectMapper();
+        private JsonMapper jsonParser = new JsonMapper();
         private boolean dynamic = true;
         private ApprovalPolicy approvalPolicy = ApprovalPolicy.NONE;
         private ErrorMessageResolver errorMessages = ErrorMessageResolver.MASKED;
@@ -41,7 +41,7 @@ public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
             return this;
         }
 
-        public UiMessageStreamBuilder jsonParser(ObjectMapper jsonParser) {
+        public UiMessageStreamBuilder jsonParser(JsonMapper jsonParser) {
             this.jsonParser = jsonParser;
             return this;
         }

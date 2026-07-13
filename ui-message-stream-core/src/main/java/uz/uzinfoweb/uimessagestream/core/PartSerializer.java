@@ -2,7 +2,6 @@ package uz.uzinfoweb.uimessagestream.core;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.LinkedHashMap;
@@ -29,23 +28,23 @@ public final class PartSerializer {
     /** Required response {@code Content-Type}. */
     public static final String CONTENT_TYPE = "text/event-stream";
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    /** Uses an internal, null-omitting {@link ObjectMapper}. */
+    /** Uses an internal, null-omitting {@link JsonMapper}. */
     public PartSerializer() {
         this(defaultObjectMapper());
     }
 
     /**
-     * Uses the supplied {@link ObjectMapper} as-is (so applications can register modules for their
+     * Uses the supplied {@link JsonMapper} as-is (so applications can register modules for their
      * own {@code data-*} payload types). Nested {@code null} handling follows that mapper's config;
      * the protocol's own part fields are already null-free by construction.
      */
-    public PartSerializer(ObjectMapper objectMapper) {
+    public PartSerializer(JsonMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
-    private static ObjectMapper defaultObjectMapper() {
+    private static JsonMapper defaultObjectMapper() {
         return JsonMapper.builder()
                 .changeDefaultPropertyInclusion(old ->
                         JsonInclude.Value.construct(JsonInclude.Include.NON_NULL, JsonInclude.Include.NON_NULL))

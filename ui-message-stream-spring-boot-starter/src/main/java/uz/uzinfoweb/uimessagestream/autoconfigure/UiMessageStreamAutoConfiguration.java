@@ -1,6 +1,6 @@
 package uz.uzinfoweb.uimessagestream.autoconfigure;
 
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.ObjectProvider;
@@ -76,7 +76,7 @@ public class UiMessageStreamAutoConfiguration {
 
         return UiMessageStreamToolAdvisor.uiMessageStreamBuilder()
                 .toolCallingManager(toolCallingManager)
-                .jsonParser(new ObjectMapper())
+                .jsonParser(new JsonMapper())
                 .dynamic(dynamicTools)
                 .approvalPolicy(policy)
                 .errorMessages(resolver)

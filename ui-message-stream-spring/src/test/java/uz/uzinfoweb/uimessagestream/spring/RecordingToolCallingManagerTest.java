@@ -1,6 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -92,7 +92,7 @@ class RecordingToolCallingManagerTest {
     void dynamicTagging() {
         List<UiMessagePart> dyn = recordParts(new RecordingToolCallingManager(
                 delegate(new AtomicBoolean(), toolResponse("call_1", "getWeather", "{\"tempC\":12}")),
-                new ObjectMapper(), true));
+                new JsonMapper(), true));
         UiMessagePart.ToolInputAvailable dynIn =
                 (UiMessagePart.ToolInputAvailable) dyn.get(indexOfType(dyn, "tool-input-available"));
         UiMessagePart.ToolOutputAvailable dynOut =
@@ -102,7 +102,7 @@ class RecordingToolCallingManagerTest {
 
         List<UiMessagePart> stat = recordParts(new RecordingToolCallingManager(
                 delegate(new AtomicBoolean(), toolResponse("call_1", "getWeather", "{}")),
-                new ObjectMapper(), false));
+                new JsonMapper(), false));
         UiMessagePart.ToolInputAvailable statIn =
                 (UiMessagePart.ToolInputAvailable) stat.get(indexOfType(stat, "tool-input-available"));
         assertThat(statIn.dynamic()).isNull();
@@ -138,7 +138,7 @@ class RecordingToolCallingManagerTest {
         sink.bind(new UiMessageStreamWriter(parts::add));
 
         RecordingToolCallingManager manager = new RecordingToolCallingManager(
-                throwingDelegate("kaboom"), new ObjectMapper(), true, ApprovalPolicy.NONE,
+                throwingDelegate("kaboom"), new JsonMapper(), true, ApprovalPolicy.NONE,
                 ErrorMessageResolver.MESSAGE);
 
         assertThatThrownBy(() -> manager.executeToolCalls(
@@ -174,7 +174,7 @@ class RecordingToolCallingManagerTest {
         AtomicBoolean delegated = new AtomicBoolean(false);
         ToolCallingManager delegate = delegate(delegated, toolResponse("call_1", "getWeather", "{}"));
 
-        ToolExecutionResult result = new RecordingToolCallingManager(delegate, new ObjectMapper(), true,
+        ToolExecutionResult result = new RecordingToolCallingManager(delegate, new JsonMapper(), true,
                 (name, input) -> true)
                 .executeToolCalls(promptWith(sink, Map.of()),
                         chatResponseWithToolCall("call_1", "getWeather", "{\"city\":\"NYC\"}"));
@@ -199,7 +199,7 @@ class RecordingToolCallingManagerTest {
         AtomicBoolean delegated = new AtomicBoolean(false);
         ToolCallingManager delegate = delegate(delegated, toolResponse("call_1", "getWeather", "{}"));
 
-        ToolExecutionResult result = new RecordingToolCallingManager(delegate, new ObjectMapper(), true,
+        ToolExecutionResult result = new RecordingToolCallingManager(delegate, new JsonMapper(), true,
                 (name, input) -> true)
                 .executeToolCalls(promptWith(sink, Map.of("call_1", false)),
                         chatResponseWithToolCall("call_1", "getWeather", "{}"));
@@ -221,7 +221,7 @@ class RecordingToolCallingManagerTest {
         AtomicBoolean delegated = new AtomicBoolean(false);
         ToolCallingManager delegate = delegate(delegated, toolResponse("call_1", "getWeather", "{\"tempC\":12}"));
 
-        new RecordingToolCallingManager(delegate, new ObjectMapper(), true, (name, input) -> true)
+        new RecordingToolCallingManager(delegate, new JsonMapper(), true, (name, input) -> true)
                 .executeToolCalls(promptWith(sink, Map.of("call_1", true)),
                         chatResponseWithToolCall("call_1", "getWeather", "{}"));
 

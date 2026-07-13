@@ -1,6 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -77,18 +77,18 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
     private static final String DENIED_MESSAGE = "Error: The user denied execution of this tool.";
 
     private final ToolCallingManager delegate;
-    private final ObjectMapper jsonParser;
+    private final JsonMapper jsonParser;
     private final boolean dynamic;
     private final ApprovalPolicy approvalPolicy;
     private final ErrorMessageResolver errorMessages;
 
-    /** Decorates {@code delegate} with an internal {@link ObjectMapper}; tool parts are tagged {@code dynamic:true}; no approval gate. */
+    /** Decorates {@code delegate} with an internal {@link JsonMapper}; tool parts are tagged {@code dynamic:true}; no approval gate. */
     public RecordingToolCallingManager(ToolCallingManager delegate) {
-        this(delegate, new ObjectMapper(), true, ApprovalPolicy.NONE);
+        this(delegate, new JsonMapper(), true, ApprovalPolicy.NONE);
     }
 
     /** As {@link #RecordingToolCallingManager(ToolCallingManager)} but with a custom JSON parser. */
-    public RecordingToolCallingManager(ToolCallingManager delegate, ObjectMapper jsonParser) {
+    public RecordingToolCallingManager(ToolCallingManager delegate, JsonMapper jsonParser) {
         this(delegate, jsonParser, true, ApprovalPolicy.NONE);
     }
 
@@ -96,7 +96,7 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
      * @param dynamic whether emitted tool parts carry {@code "dynamic":true} (rendered via the client's
      *                generic {@code dynamic-tool} path); {@code false} emits statically-typed tool parts
      */
-    public RecordingToolCallingManager(ToolCallingManager delegate, ObjectMapper jsonParser, boolean dynamic) {
+    public RecordingToolCallingManager(ToolCallingManager delegate, JsonMapper jsonParser, boolean dynamic) {
         this(delegate, jsonParser, dynamic, ApprovalPolicy.NONE);
     }
 
@@ -104,7 +104,7 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
      * @param approvalPolicy decides which tool calls must be approved before execution (HITL); use
      *                       {@link ApprovalPolicy#NONE} to disable the gate
      */
-    public RecordingToolCallingManager(ToolCallingManager delegate, ObjectMapper jsonParser, boolean dynamic,
+    public RecordingToolCallingManager(ToolCallingManager delegate, JsonMapper jsonParser, boolean dynamic,
                                        ApprovalPolicy approvalPolicy) {
         this(delegate, jsonParser, dynamic, approvalPolicy, ErrorMessageResolver.MASKED);
     }
@@ -114,7 +114,7 @@ public final class RecordingToolCallingManager implements ToolCallingManager {
      *                      {@code tool-output-error}; the default {@link ErrorMessageResolver#MASKED}
      *                      never discloses exception internals to the client
      */
-    public RecordingToolCallingManager(ToolCallingManager delegate, ObjectMapper jsonParser, boolean dynamic,
+    public RecordingToolCallingManager(ToolCallingManager delegate, JsonMapper jsonParser, boolean dynamic,
                                        ApprovalPolicy approvalPolicy, ErrorMessageResolver errorMessages) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.jsonParser = Objects.requireNonNull(jsonParser, "jsonParser");

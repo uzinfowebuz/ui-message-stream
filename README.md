@@ -89,7 +89,7 @@ repository and depend on the starter using JitPack's multi-module coordinate
 <dependency>
     <groupId>com.github.uzinfowebuz.ui-message-stream</groupId>
     <artifactId>ui-message-stream-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.4.1</version>
 </dependency>
 ```
 

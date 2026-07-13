@@ -1,6 +1,6 @@
 package uz.uzinfoweb.uimessagestream.spring;
 
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -40,7 +40,7 @@ import java.util.Objects;
  */
 public final class UiMessageRequestAdapter {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final JsonMapper JSON = new JsonMapper();
     private static final String DENIED_MESSAGE = "Error: The user denied execution of this tool.";
 
     private UiMessageRequestAdapter() {
