@@ -11,6 +11,16 @@ import org.springframework.ai.model.tool.ToolExecutionEligibilityChecker;
  *
  * <p>The recording manager remains private to this advisor's tool loop, allowing applications to
  * opt in per {@code ChatClient} without replacing the global {@link ToolCallingManager} bean.
+ *
+ * <p><strong>Conversation history is enabled by default.</strong> Providers require the tool turn
+ * sequence to stay contiguous in the follow-up request after a tool executes: {@code user →
+ * assistant(functionCall) → tool(functionResponse)}. With history disabled, the parent
+ * {@link ToolCallingAdvisor} rebuilds that follow-up prompt as {@code [system, toolResponse]} —
+ * dropping the user and function-call turns — which Gemini rejects with {@code 400 "Please ensure
+ * that function response turn comes immediately after a function call turn"} (OpenAI-style APIs
+ * impose the same adjacency). Opting out via {@link UiMessageStreamBuilder#conversationHistory(boolean)}
+ * is legitimate only when a chat-memory advisor sits <em>inside</em> the tool loop and re-injects
+ * the history on every iteration itself.
  */
 public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
 
@@ -19,10 +29,19 @@ public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
                                       boolean dynamic,
                                       ApprovalPolicy approvalPolicy,
                                       ErrorMessageResolver errorMessages) {
+        this(delegate, jsonParser, dynamic, approvalPolicy, errorMessages, true);
+    }
+
+    public UiMessageStreamToolAdvisor(ToolCallingManager delegate,
+                                      JsonMapper jsonParser,
+                                      boolean dynamic,
+                                      ApprovalPolicy approvalPolicy,
+                                      ErrorMessageResolver errorMessages,
+                                      boolean conversationHistory) {
         super(new RecordingToolCallingManager(delegate, jsonParser, dynamic, approvalPolicy, errorMessages),
               DEFAULT_TOOL_EXECUTION_ELIGIBILITY_CHECKER,
               DEFAULT_ORDER,
-              false);
+              conversationHistory);
     }
 
     public static UiMessageStreamBuilder uiMessageStreamBuilder() {
@@ -35,6 +54,7 @@ public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
         private boolean dynamic = true;
         private ApprovalPolicy approvalPolicy = ApprovalPolicy.NONE;
         private ErrorMessageResolver errorMessages = ErrorMessageResolver.MASKED;
+        private boolean conversationHistory = true;
 
         public UiMessageStreamBuilder toolCallingManager(ToolCallingManager toolCallingManager) {
             this.toolCallingManager = toolCallingManager;
@@ -61,8 +81,14 @@ public class UiMessageStreamToolAdvisor extends ToolCallingAdvisor {
             return this;
         }
 
+        public UiMessageStreamBuilder conversationHistory(boolean conversationHistory) {
+            this.conversationHistory = conversationHistory;
+            return this;
+        }
+
         public UiMessageStreamToolAdvisor build() {
-            return new UiMessageStreamToolAdvisor(toolCallingManager, jsonParser, dynamic, approvalPolicy, errorMessages);
+            return new UiMessageStreamToolAdvisor(toolCallingManager, jsonParser, dynamic, approvalPolicy, errorMessages,
+                    conversationHistory);
         }
     }
 }

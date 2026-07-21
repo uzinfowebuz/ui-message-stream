@@ -6,6 +6,30 @@ All notable changes to **ui-message-stream** are documented here. The format is 
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-21
+
+Behavioral bug-fix release for the advisor-owned tool loop.
+
+### Fixed
+
+- **`UiMessageStreamToolAdvisor` now keeps conversation history in the tool loop by default.**
+  Since its introduction (through `0.4.1`) the advisor passed `conversationHistoryEnabled=false` to
+  Spring AI's `ToolCallingAdvisor`, so the follow-up request after every tool execution was rebuilt
+  as `[system, toolResponse]` — dropping the user turn and the assistant's function-call turn. That
+  broke the provider-required contiguous turn sequence `user → assistant(functionCall) →
+  tool(functionResponse)`: Gemini rejected every post-tool model call with `400 "Please ensure that
+  function response turn comes immediately after a function call turn"` (OpenAI-style APIs impose
+  the same adjacency), making any chat request that invoked a tool fail. History is now enabled by
+  default; the existing 5-arg constructor keeps its signature and defaults to the fixed behavior.
+
+### Added
+
+- **`UiMessageStreamBuilder.conversationHistory(boolean)`** (default `true`) and a matching
+  6-arg `UiMessageStreamToolAdvisor` constructor overload, as an explicit opt-out for the rare
+  setup where a chat-memory advisor sits *inside* the tool loop and re-injects the history itself.
+- **`uimessagestream.tool-io.conversation-history`** starter property (default `true`), wired
+  through to the auto-configured advisor.
+
 ## [0.4.0] - 2026-07-11
 
 Spring Boot 4.1 and Spring AI 2.0 compatibility release.
@@ -157,7 +181,8 @@ Java 25.
 - **OSS readiness**: Apache-2.0 `LICENSE` + `NOTICE`, complete POM metadata, and a `release` profile
   (sources + javadoc jars, GPG signing, `central-publishing-maven-plugin`) for Maven Central.
 
-[Unreleased]: https://github.com/uzinfowebuz/ui-message-stream/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/uzinfowebuz/ui-message-stream/compare/0.4.2...HEAD
+[0.4.2]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.4.2
 [0.4.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.4.0
 [0.3.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.3.0
 [0.2.0]: https://github.com/uzinfowebuz/ui-message-stream/releases/tag/0.2.0

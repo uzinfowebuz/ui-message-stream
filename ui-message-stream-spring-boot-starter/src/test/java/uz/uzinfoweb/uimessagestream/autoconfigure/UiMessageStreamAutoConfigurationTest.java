@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -22,6 +23,7 @@ import uz.uzinfoweb.uimessagestream.spring.ApprovalPolicy;
 import uz.uzinfoweb.uimessagestream.spring.ResponseMapper;
 import uz.uzinfoweb.uimessagestream.spring.UiMessageStreamToolAdvisor;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +63,25 @@ class UiMessageStreamAutoConfigurationTest {
     }
 
     @Test
+    @DisplayName("conversation history is enabled on the advisor by default")
+    void conversationHistoryEnabledByDefault() {
+        runner.withUserConfiguration(StubManagerConfiguration.class)
+                .withPropertyValues("uimessagestream.tool-io.native=true")
+                .run(context -> assertThat(
+                        conversationHistoryEnabled(context.getBean(UiMessageStreamToolAdvisor.class))).isTrue());
+    }
+
+    @Test
+    @DisplayName("the conversation-history=false property is wired into the advisor")
+    void conversationHistoryPropertyWiresIntoAdvisor() {
+        runner.withUserConfiguration(StubManagerConfiguration.class)
+                .withPropertyValues("uimessagestream.tool-io.native=true",
+                        "uimessagestream.tool-io.conversation-history=false")
+                .run(context -> assertThat(
+                        conversationHistoryEnabled(context.getBean(UiMessageStreamToolAdvisor.class))).isFalse());
+    }
+
+    @Test
     @DisplayName("registers a default no-op ApprovalPolicy")
     void registersDefaultApprovalPolicy() {
         runner.run(context -> {
@@ -92,6 +113,16 @@ class UiMessageStreamAutoConfigurationTest {
                     .findFirst().orElseThrow();
             assertThat(input.dynamic()).isNull();
         });
+    }
+
+    /**
+     * {@code conversationHistoryEnabled} is a private field of the parent {@link ToolCallingAdvisor}
+     * with no accessor, so the wiring is asserted reflectively.
+     */
+    private static boolean conversationHistoryEnabled(UiMessageStreamToolAdvisor advisor) throws Exception {
+        Field field = ToolCallingAdvisor.class.getDeclaredField("conversationHistoryEnabled");
+        field.setAccessible(true);
+        return (boolean) field.get(advisor);
     }
 
     private static ChatClientResponse toolCallResponse() {

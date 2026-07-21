@@ -337,3 +337,20 @@ detail of `UiMessageStreamToolAdvisor`, registers the advisor through `ChatClien
 leaves the application's `ToolCallingManager` bean untouched. The same approval, error, cancellation,
 ordering, and UI-message wire contracts are retained and covered by manager, auto-configuration, and
 streaming advisor tests.
+
+## 14. Fixed (`0.4.2`): conversation history in the advisor's tool loop
+
+Through `0.4.1`, `UiMessageStreamToolAdvisor` constructed its parent `ToolCallingAdvisor` with
+`conversationHistoryEnabled=false`. With history disabled, Spring AI rebuilds the follow-up prompt
+after a tool execution as `[system, lastHistoryMessage]` — i.e. `[system, toolResponse]` — dropping
+the user turn and the assistant's function-call turn. Providers require the tool turn sequence to
+stay contiguous (`user → assistant(functionCall) → tool(functionResponse)`); Gemini rejected the
+truncated prompt with `400 "Please ensure that function response turn comes immediately after a
+function call turn"` (OpenAI-style APIs impose the same adjacency), so every request that invoked a
+tool failed on the follow-up model call.
+
+As of `0.4.2` the advisor enables conversation history by default. The starter exposes
+`uimessagestream.tool-io.conversation-history` (default `true`), and the builder offers
+`conversationHistory(boolean)` plus a matching constructor overload. Opting out is legitimate only
+when a chat-memory advisor sits *inside* the tool loop and re-injects the history on every
+iteration itself.

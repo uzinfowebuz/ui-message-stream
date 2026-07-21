@@ -6,6 +6,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -83,6 +84,79 @@ class UiMessageStreamToolAdvisorTest {
                 .containsSubsequence("tool-input-available", "tool-output-available");
     }
 
+    @Test
+    @DisplayName("keeps user -> assistant(functionCall) -> toolResponse contiguous in the follow-up prompt")
+    void followUpPromptKeepsConversationTurns() {
+        List<Message> second = secondPromptInstructions(
+                UiMessageStreamToolAdvisor.uiMessageStreamBuilder()
+                        .toolCallingManager(ToolCallingManager.builder().build())
+                        .build());
+
+        assertThat(second.getFirst().getMessageType()).isEqualTo(MessageType.SYSTEM);
+        List<Message> userTurns = second.stream()
+                .filter(message -> message.getMessageType() == MessageType.USER)
+                .toList();
+        assertThat(userTurns).hasSize(1);
+        assertThat(userTurns.getFirst().getText()).isEqualTo("weather");
+
+        int functionCallIdx = indexOfAssistantWithToolCalls(second);
+        assertThat(functionCallIdx)
+                .as("assistant functionCall turn must be present after the user turn")
+                .isGreaterThan(second.indexOf(userTurns.getFirst()));
+        assertThat(second.get(functionCallIdx + 1))
+                .as("tool response turn must come immediately after the function call turn")
+                .isInstanceOf(ToolResponseMessage.class);
+    }
+
+    @Test
+    @DisplayName("conversationHistory(false) restores the legacy [system, toolResponse] follow-up shape")
+    void conversationHistoryOptOutDropsConversationTurns() {
+        List<Message> second = secondPromptInstructions(
+                UiMessageStreamToolAdvisor.uiMessageStreamBuilder()
+                        .toolCallingManager(ToolCallingManager.builder().build())
+                        .conversationHistory(false)
+                        .build());
+
+        assertThat(second).hasSize(2);
+        assertThat(second.getFirst().getMessageType()).isEqualTo(MessageType.SYSTEM);
+        assertThat(second.getLast()).isInstanceOf(ToolResponseMessage.class);
+        assertThat(second.stream().filter(message -> message.getMessageType() == MessageType.USER)).isEmpty();
+        assertThat(indexOfAssistantWithToolCalls(second)).isEqualTo(-1);
+    }
+
+    /**
+     * Runs a streaming tool round-trip through a real {@code ChatClient} and returns the
+     * instructions of the second {@link Prompt} handed to the model — the follow-up request the
+     * provider receives after the tool has executed.
+     */
+    private List<Message> secondPromptInstructions(UiMessageStreamToolAdvisor advisor) {
+        List<Prompt> prompts = new ArrayList<>();
+        ChatClient chatClient = ChatClient.builder(new ScriptedToolChatModel(new AtomicInteger(), prompts))
+                .defaultTools(new WeatherTools())
+                .defaultAdvisors(advisor)
+                .build();
+
+        chatClient.prompt()
+                .system("You are a weather assistant")
+                .user("weather")
+                .stream()
+                .content()
+                .collectList()
+                .block();
+
+        assertThat(prompts).hasSize(2);
+        return prompts.get(1).getInstructions();
+    }
+
+    private int indexOfAssistantWithToolCalls(List<Message> messages) {
+        for (int i = 0; i < messages.size(); i++) {
+            if (messages.get(i) instanceof AssistantMessage assistant && assistant.hasToolCalls()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private static final class WeatherTools {
 
         @Tool(description = "Get the current temperature")
@@ -94,9 +168,15 @@ class UiMessageStreamToolAdvisorTest {
     private static final class ScriptedToolChatModel implements ChatModel {
 
         private final AtomicInteger calls;
+        private final List<Prompt> prompts;
 
         private ScriptedToolChatModel(AtomicInteger calls) {
+            this(calls, new ArrayList<>());
+        }
+
+        private ScriptedToolChatModel(AtomicInteger calls, List<Prompt> prompts) {
             this.calls = calls;
+            this.prompts = prompts;
         }
 
         @Override
@@ -116,6 +196,7 @@ class UiMessageStreamToolAdvisorTest {
 
         private ChatResponse response(Prompt prompt) {
             calls.incrementAndGet();
+            prompts.add(prompt);
             Message last = prompt.getInstructions().getLast();
             if (last instanceof ToolResponseMessage) {
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("Done"))));

@@ -163,8 +163,16 @@ uimessagestream.tool-io.native=true
 Then create a per-request `SerializedPartSink`, publish it in the tool context, and pass the same sink
 to the transport. `UiMessageStreamToolAdvisor` owns the Spring AI tool loop and delegates execution
 through its private `RecordingToolCallingManager`, which emits paired `tool-input-available` and
-`tool-output-available` parts onto that sink. The idiomatic way to publish the sink is the
-`UiMessageStreamAdvisor` (a Spring AI `StreamAdvisor`):
+`tool-output-available` parts onto that sink.
+
+The advisor keeps the full conversation in the follow-up request after each tool execution
+(`uimessagestream.tool-io.conversation-history`, default `true` — since `0.4.2`), preserving the turn
+sequence providers require: `user → assistant(functionCall) → tool(functionResponse)` must stay
+contiguous, or Gemini/OpenAI-style APIs reject the post-tool call with a 400. Disable it (property
+`=false`, or builder `conversationHistory(false)`) only if a chat-memory advisor *inside* the tool
+loop re-injects the history itself.
+
+The idiomatic way to publish the sink is the `UiMessageStreamAdvisor` (a Spring AI `StreamAdvisor`):
 
 ```java
 SerializedPartSink sink = new SerializedPartSink();

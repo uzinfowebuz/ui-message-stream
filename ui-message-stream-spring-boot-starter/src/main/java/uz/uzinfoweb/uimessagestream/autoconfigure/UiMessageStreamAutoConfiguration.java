@@ -29,6 +29,11 @@ import uz.uzinfoweb.uimessagestream.spring.UiMessageStreamToolAdvisor;
  *   <li>{@code native} (default {@code false}) — register a {@link UiMessageStreamToolAdvisor} so
  *       tool input + output (and the HITL approval gate) are emitted natively into the per-request
  *       {@link uz.uzinfoweb.uimessagestream.spring.SerializedPartSink}.</li>
+ *   <li>{@code conversation-history} (default {@code true}) — keep the full conversation (user turn,
+ *       assistant function-call turn) in the follow-up request after a tool executes, so the
+ *       provider-required {@code user → assistant(functionCall) → tool(functionResponse)} turn
+ *       sequence stays contiguous. Disable only if a chat-memory advisor inside the tool loop
+ *       re-injects the history itself.</li>
  * </ul>
  *
  * <p>{@code uimessagestream.errors.include-message} (default {@code false}) — when {@code true}, a tool
@@ -66,6 +71,7 @@ public class UiMessageStreamAutoConfiguration {
     public UiMessageStreamToolAdvisor uiMessageStreamToolAdvisor(
             ToolCallingManager toolCallingManager,
             @Value("${uimessagestream.tool-io.dynamic:true}") boolean dynamicTools,
+            @Value("${uimessagestream.tool-io.conversation-history:true}") boolean conversationHistory,
             @Value("${uimessagestream.errors.include-message:false}") boolean includeMessage,
             ObjectProvider<ApprovalPolicy> approvalPolicy,
             ObjectProvider<ErrorMessageResolver> errorMessages) {
@@ -80,6 +86,7 @@ public class UiMessageStreamAutoConfiguration {
                 .dynamic(dynamicTools)
                 .approvalPolicy(policy)
                 .errorMessages(resolver)
+                .conversationHistory(conversationHistory)
                 .build();
     }
 
